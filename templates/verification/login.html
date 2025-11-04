@@ -1,0 +1,207 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="card">
+    <h2 style="text-align: center; color: #003366; margin-bottom: 2rem;">Identity Verification Login</h2>
+    
+    <form id="securityNumberForm">
+        <div class="form-group">
+            <label for="security_number">Security Number:</label>
+            <input type="password" id="security_number" name="security_number" required 
+                   placeholder="Enter your security number">
+        </div>
+        <button type="submit" class="btn" style="width: 100%;">Start Face Verification</button>
+    </form>
+    
+    <div id="videoSection" class="hidden">
+        <div class="video-container">
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas" style="display: none;"></canvas>
+            <img src="{% static 'images/watermark.png' %}" alt="AFZ Watermark" class="watermark" id="watermark">
+        </div>
+        
+        <div style="text-align: center; margin-top: 1.5rem;">
+            <button id="captureBtn" class="btn btn-success" style="padding: 1rem 2rem; font-size: 1.1rem;">
+                Verify Face
+            </button>
+            <div id="verificationResult" class="verification-result"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let sessionId = null;
+    let stream = null;
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const context = canvas.getContext('2d');
+    const watermark = document.getElementById('watermark');
+
+    // Debug watermark loading
+    window.addEventListener('load', function() {
+        const watermark = document.getElementById('watermark');
+        console.log('Watermark element:', watermark);
+        console.log('Watermark src:', watermark ? watermark.src : 'Not found');
+        
+        if (watermark) {
+            watermark.onload = function() {
+                console.log('Watermark loaded successfully');
+            };
+            watermark.onerror = function() {
+                console.log('Watermark failed to load');
+                // Create a fallback watermark
+                const fallback = document.createElement('div');
+                fallback.style.position = 'absolute';
+                fallback.style.bottom = '20px';
+                fallback.style.right = '20px';
+                fallback.style.width = '100px';
+                fallback.style.height = '100px';
+                fallback.style.backgroundColor = '#003366';
+                fallback.style.opacity = '0.3';
+                fallback.style.borderRadius = '10px';
+                fallback.style.display = 'flex';
+                fallback.style.alignItems = 'center';
+                fallback.style.justifyContent = 'center';
+                fallback.style.color = 'white';
+                fallback.style.fontWeight = 'bold';
+                fallback.style.fontSize = '12px';
+                fallback.style.textAlign = 'center';
+                fallback.innerHTML = 'AFZ<br>SECURITY';
+                fallback.style.zIndex = '100';
+                fallback.style.pointerEvents = 'none';
+                
+                const videoContainer = document.querySelector('.video-container');
+                if (videoContainer) {
+                    videoContainer.appendChild(fallback);
+                }
+            };
+        }
+    });
+
+    // Start webcam
+    async function startWebcam() {
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                    width: 640, 
+                    height: 480,
+                    facingMode: 'user'
+                } 
+            });
+            video.srcObject = stream;
+        } catch (err) {
+            console.error('Error accessing webcam:', err);
+            alert('Error accessing webcam. Please ensure your camera is connected and permissions are granted.');
+        }
+    }
+
+    // Stop webcam
+    function stopWebcam() {
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+        }
+    }
+
+    // Capture frame and send for verification
+    function captureFrame() {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0);
+        
+        return canvas.toDataURL('image/jpeg', 0.8);
+    }
+
+    // Handle security number form submission
+    document.getElementById('securityNumberForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const securityNumber = document.getElementById('security_number').value;
+        
+        if (!securityNumber) {
+            alert('Please enter your security number');
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/verification/verification/start_verification/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken
+                },
+                body: JSON.stringify({
+                    security_number: securityNumber,
+                    verification_type: 'login'
+                })
+            });
+            
+            const data = await response.json();
+            if (response.ok) {
+                sessionId = data.session_id;
+                document.getElementById('videoSection').classList.remove('hidden');
+                document.getElementById('securityNumberForm').style.display = 'none';
+                await startWebcam();
+            } else {
+                alert('Error: ' + (data.error || 'Invalid security number'));
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Network error. Please try again.');
+        }
+    });
+
+    // Handle face verification
+    document.getElementById('captureBtn').addEventListener('click', async () => {
+        if (!sessionId) {
+            alert('Please start verification first');
+            return;
+        }
+        
+        const captureBtn = document.getElementById('captureBtn');
+        const originalText = captureBtn.textContent;
+        captureBtn.textContent = 'Verifying...';
+        captureBtn.disabled = true;
+        
+        const imageData = captureFrame();
+        
+        try {
+            const response = await fetch('/api/verification/verification/verify_face/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken
+                },
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    image: imageData
+                })
+            });
+            
+            const data = await response.json();
+            const resultDiv = document.getElementById('verificationResult');
+            
+            if (data.verified) {
+                resultDiv.innerHTML = `<div class="success">✓ ${data.message}</div>`;
+                setTimeout(() => {
+                    window.location.href = '/dashboard/';
+                }, 2000);
+            } else {
+                resultDiv.innerHTML = `<div class="error">✗ ${data.message}</div>`;
+                captureBtn.textContent = originalText;
+                captureBtn.disabled = false;
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            resultDiv.innerHTML = `<div class="error">✗ Network error. Please try again.</div>`;
+            captureBtn.textContent = originalText;
+            captureBtn.disabled = false;
+        }
+    });
+
+    // Start webcam on page load for preview
+    window.addEventListener('load', startWebcam);
+    
+    // Stop webcam when leaving page
+    window.addEventListener('beforeunload', stopWebcam);
+</script>
+{% endblock %}

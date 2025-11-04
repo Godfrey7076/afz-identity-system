@@ -1,0 +1,180 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="card">
+    <h2 style="color: #003366; margin-bottom: 2rem;">Visitor Management</h2>
+    
+    <div class="card" style="margin-bottom: 2rem;">
+        <h3 style="color: #003366; margin-bottom: 1rem;">Add New Visitor</h3>
+        <form id="visitorForm">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label for="full_name">Full Name *</label>
+                    <input type="text" id="full_name" name="full_name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="id_number">ID Number *</label>
+                    <input type="text" id="id_number" name="id_number" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="phone_number">Phone Number *</label>
+                    <input type="tel" id="phone_number" name="phone_number" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="email">
+                </div>
+                
+                <div class="form-group" style="grid-column: span 2;">
+                    <label for="purpose_of_visit">Purpose of Visit *</label>
+                    <textarea id="purpose_of_visit" name="purpose_of_visit" rows="3" required></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="expected_duration">Expected Duration (minutes) *</label>
+                    <input type="number" id="expected_duration" name="expected_duration" value="60" min="15" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="host_member">Host Member *</label>
+                    <select id="host_member" name="host_member" required>
+                        <option value="">Select Host Member</option>
+                        <!-- Will be populated by JavaScript -->
+                    </select>
+                </div>
+            </div>
+            
+            <button type="submit" class="btn" style="margin-top: 1rem;">Add Visitor</button>
+        </form>
+    </div>
+    
+    <div class="card">
+        <h3 style="color: #003366; margin-bottom: 1rem;">Recent Visitors</h3>
+        <div id="visitorsList">
+            <p>Loading visitors...</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Load host members and visitors
+    async function loadVisitorData() {
+        try {
+            // Load host members
+            const membersResponse = await fetch('/api/users/users/');
+            if (membersResponse.ok) {
+                const membersData = await membersResponse.json();
+                const hostSelect = document.getElementById('host_member');
+                hostSelect.innerHTML = '<option value="">Select Host Member</option>';
+                
+                membersData.forEach(member => {
+                    const option = document.createElement('option');
+                    option.value = member.id;
+                    option.textContent = `${member.first_name} ${member.last_name} (${member.unit})`;
+                    hostSelect.appendChild(option);
+                });
+            }
+            
+            // Load visitors
+            const visitorsResponse = await fetch('/api/users/visitors/');
+            if (visitorsResponse.ok) {
+                const visitorsData = await visitorsResponse.json();
+                const visitorsContainer = document.getElementById('visitorsList');
+                visitorsContainer.innerHTML = '';
+                
+                if (visitorsData.length > 0) {
+                    visitorsData.forEach(visitor => {
+                        const visitorElement = document.createElement('div');
+                        visitorElement.style.padding = '1rem';
+                        visitorElement.style.border = '1px solid #e0e0e0';
+                        visitorElement.style.borderRadius = '6px';
+                        visitorElement.style.marginBottom = '1rem';
+                        visitorElement.style.background = '#f8f9fa';
+                        
+                        const statusColors = {
+                            'pending': '#ffc107',
+                            'approved': '#28a745',
+                            'rejected': '#dc3545',
+                            'active': '#17a2b8',
+                            'completed': '#6c757d',
+                            'overstayed': '#dc3545'
+                        };
+                        
+                        visitorElement.innerHTML = `
+                            <div style="display: flex; justify-content: space-between; align-items: start;">
+                                <div>
+                                    <h4 style="margin: 0 0 0.5rem 0; color: #003366;">${visitor.full_name}</h4>
+                                    <p style="margin: 0.25rem 0;"><strong>ID:</strong> ${visitor.id_number}</p>
+                                    <p style="margin: 0.25rem 0;"><strong>Phone:</strong> ${visitor.phone_number}</p>
+                                    <p style="margin: 0.25rem 0;"><strong>Purpose:</strong> ${visitor.purpose_of_visit}</p>
+                                    <p style="margin: 0.25rem 0;"><strong>Host:</strong> ${visitor.host_member_name}</p>
+                                    <p style="margin: 0.25rem 0;"><strong>Duration:</strong> ${visitor.expected_duration} minutes</p>
+                                </div>
+                                <div style="text-align: right;">
+                                    <span style="background: ${statusColors[visitor.status]}; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem; text-transform: capitalize;">
+                                        ${visitor.status}
+                                    </span>
+                                    <p style="margin: 0.5rem 0 0 0; font-size: 0.8rem; color: #666;">
+                                        Created: ${new Date(visitor.created_at).toLocaleDateString()}
+                                    </p>
+                                </div>
+                            </div>
+                        `;
+                        visitorsContainer.appendChild(visitorElement);
+                    });
+                } else {
+                    visitorsContainer.innerHTML = '<p>No visitors found.</p>';
+                }
+            }
+            
+        } catch (error) {
+            console.error('Error loading visitor data:', error);
+        }
+    }
+    
+    // Handle form submission
+    document.getElementById('visitorForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const formData = {
+            full_name: document.getElementById('full_name').value,
+            id_number: document.getElementById('id_number').value,
+            phone_number: document.getElementById('phone_number').value,
+            email: document.getElementById('email').value,
+            purpose_of_visit: document.getElementById('purpose_of_visit').value,
+            expected_duration: parseInt(document.getElementById('expected_duration').value),
+            host_member: parseInt(document.getElementById('host_member').value)
+        };
+        
+        try {
+            const response = await fetch('/api/users/visitors/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken
+                },
+                body: JSON.stringify(formData)
+            });
+            
+            if (response.ok) {
+                alert('Visitor added successfully!');
+                document.getElementById('visitorForm').reset();
+                loadVisitorData(); // Refresh the list
+            } else {
+                const errorData = await response.json();
+                alert('Error adding visitor: ' + (errorData.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Network error. Please try again.');
+        }
+    });
+    
+    // Load data when page loads
+    window.addEventListener('load', loadVisitorData);
+</script>
+{% endblock %}

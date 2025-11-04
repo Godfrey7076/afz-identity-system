@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="card">
+    <h2 style="color: #003366; margin-bottom: 2rem;">Dashboard - Air Force Zimbabwe</h2>
+    
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+        <div class="card" style="text-align: center; background: linear-gradient(135deg, #003366, #004080); color: white;">
+            <h3>Today's Logins</h3>
+            <p style="font-size: 2rem; font-weight: bold; color: #FFD700;" id="todayLogins">0</p>
+        </div>
+        
+        <div class="card" style="text-align: center; background: linear-gradient(135deg, #28a745, #20c997); color: white;">
+            <h3>Active Visitors</h3>
+            <p style="font-size: 2rem; font-weight: bold; color: white;" id="activeVisitors">0</p>
+        </div>
+        
+        <div class="card" style="text-align: center; background: linear-gradient(135deg, #ffc107, #fd7e14); color: white;">
+            <h3>Pending Approvals</h3>
+            <p style="font-size: 2rem; font-weight: bold; color: white;" id="pendingApprovals">0</p>
+        </div>
+        
+        <div class="card" style="text-align: center; background: linear-gradient(135deg, #dc3545, #c82333); color: white;">
+            <h3>Security Alerts</h3>
+            <p style="font-size: 2rem; font-weight: bold; color: white;" id="securityAlerts">0</p>
+        </div>
+    </div>
+    
+    <div class="card">
+        <h3 style="color: #003366; margin-bottom: 1rem;">Recent Access Logs</h3>
+        <div id="recentLogs" style="min-height: 200px;">
+            <p>Loading recent access logs...</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3 style="color: #003366; margin-bottom: 1rem;">Quick Actions</h3>
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+            <button class="btn" onclick="window.location.href='/login/'">Face Verification</button>
+            <button class="btn" onclick="window.location.href='/visitor-management/'">Manage Visitors</button>
+            <button class="btn" onclick="generateReport()">Generate Report</button>
+            <button class="btn" onclick="viewSecurityLogs()">Security Logs</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Dashboard data loading
+    async function loadDashboardData() {
+        try {
+            // Load recent access logs
+            const logsResponse = await fetch('/api/verification/access-logs/');
+            if (logsResponse.ok) {
+                const logsData = await logsResponse.json();
+                const logsContainer = document.getElementById('recentLogs');
+                logsContainer.innerHTML = '';
+                
+                if (logsData.length > 0) {
+                    logsData.slice(0, 10).forEach(log => {
+                        const logElement = document.createElement('div');
+                        logElement.style.padding = '0.75rem';
+                        logElement.style.borderBottom = '1px solid #eee';
+                        logElement.style.display = 'flex';
+                        logElement.style.justifyContent = 'space-between';
+                        logElement.style.alignItems = 'center';
+                        
+                        const statusColor = log.verified_by_face ? '#28a745' : '#dc3545';
+                        const statusText = log.verified_by_face ? '✓ Verified' : '✗ Failed';
+                        
+                        logElement.innerHTML = `
+                            <div>
+                                <strong>${log.user_name || 'Unknown User'}</strong> - 
+                                <span style="text-transform: capitalize;">${log.action}</span>
+                                <span style="color: ${statusColor}; margin-left: 0.5rem;">${statusText}</span>
+                            </div>
+                            <span style="color: #666; font-size: 0.9rem;">${new Date(log.timestamp).toLocaleString()}</span>
+                        `;
+                        logsContainer.appendChild(logElement);
+                    });
+                } else {
+                    logsContainer.innerHTML = '<p>No access logs found.</p>';
+                }
+            }
+            
+            // Update counters (mock data for now - you can replace with actual API calls)
+            document.getElementById('todayLogins').textContent = '12';
+            document.getElementById('activeVisitors').textContent = '3';
+            document.getElementById('pendingApprovals').textContent = '2';
+            document.getElementById('securityAlerts').textContent = '0';
+            
+        } catch (error) {
+            console.error('Error loading dashboard data:', error);
+            document.getElementById('recentLogs').innerHTML = '<p>Error loading access logs. Please try again later.</p>';
+        }
+    }
+
+    function generateReport() {
+        alert('Report generation feature will be implemented soon.');
+    }
+
+    function viewSecurityLogs() {
+        alert('Security logs feature will be implemented soon.');
+    }
+    
+    // Load data when page loads
+    window.addEventListener('load', loadDashboardData);
+    
+    // Refresh data every 30 seconds
+    setInterval(loadDashboardData, 30000);
+</script>
+{% endblock %}
