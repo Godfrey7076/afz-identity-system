@@ -1,220 +1,172 @@
-{% extends 'base.html' %}
-{% load static %}
-
-{% block content %}
-<div class="card">
-    <h2 style="color: #003366; margin-bottom: 2rem;">User Management - Air Force of Zimbabwe</h2>
-    
-    <div class="card" style="margin-bottom: 2rem;">
-        <h3 style="color: #003366; margin-bottom: 1rem;">Add New User</h3>
-        <form id="userForm">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                <div class="form-group">
-                    <label for="username">Username *</label>
-                    <input type="text" id="username" name="username" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="email">Email *</label>
-                    <input type="email" id="email" name="email" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="first_name">First Name *</label>
-                    <input type="text" id="first_name" name="first_name" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="last_name">Last Name *</label>
-                    <input type="text" id="last_name" name="last_name" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="user_type">User Type *</label>
-                    <select id="user_type" name="user_type" required>
-                        <option value="">Select User Type</option>
-                        <option value="pass_desk">Passes & Permits Desk</option>
-                        <option value="supervisor">Supervisor</option>
-                        <option value="commander">Unit Commander</option>
-                        <option value="security_officer">Chief Security Officer</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label for="phone_number">Phone Number</label>
-                    <input type="tel" id="phone_number" name="phone_number">
-                </div>
-                
-                <div class="form-group">
-                    <label for="unit">Unit/Department *</label>
-                    <input type="text" id="unit" name="unit" value="Passes and Permits Unit" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="password">Temporary Password *</label>
-                    <input type="password" id="password" name="password" value="Afz@2024" required>
-                    <small style="color: #666;">User will be prompted to change on first login</small>
-                </div>
-            </div>
-            
-            <div style="background: #e7f3ff; padding: 1rem; border-radius: 6px; margin: 1rem 0;">
-                <h4 style="color: #003366; margin: 0 0 0.5rem 0;">System Information</h4>
-                <p style="margin: 0.25rem 0;"><strong>Security Number:</strong> <span id="securityNumberDisplay">Will be generated automatically</span></p>
-                <p style="margin: 0.25rem 0;"><strong>Status:</strong> <span id="userStatus">Pending Activation</span></p>
-            </div>
-            
-            <button type="submit" class="btn" style="margin-top: 1rem; background: #003366; color: white;">Create User</button>
-        </form>
-    </div>
-    
-    <div class="card">
-        <h3 style="color: #003366; margin-bottom: 1rem;">System Users</h3>
-        <div style="margin-bottom: 1rem;">
-            <input type="text" id="searchUsers" placeholder="Search users..." style="padding: 0.5rem; width: 100%; border: 1px solid #ccc; border-radius: 4px;">
-        </div>
-        <div id="usersList">
-            <p>Loading users...</p>
-        </div>
-    </div>
-</div>
-
-<script>
-    // Generate security number
-    function generateSecurityNumber() {
-        const prefix = 'AFZ';
-        const timestamp = Date.now().toString().slice(-6);
-        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-        return `${prefix}${timestamp}${random}`;
-    }
-
-    // Update security number display when form changes
-    document.getElementById('userForm').addEventListener('input', function() {
-        document.getElementById('securityNumberDisplay').textContent = generateSecurityNumber();
-    });
-
-    // Load users
-    async function loadUsers() {
-        try {
-            const response = await fetch('/api/users/users/');
-            if (response.ok) {
-                const usersData = await response.json();
-                const usersContainer = document.getElementById('usersList');
-                usersContainer.innerHTML = '';
-                
-                if (usersData.length > 0) {
-                    usersData.forEach(user => {
-                        const userElement = document.createElement('div');
-                        userElement.style.padding = '1rem';
-                        userElement.style.border = '1px solid #e0e0e0';
-                        userElement.style.borderRadius = '6px';
-                        userElement.style.marginBottom = '1rem';
-                        userElement.style.background = '#f8f9fa';
-                        
-                        const typeColors = {
-                            'pass_desk': '#17a2b8',
-                            'supervisor': '#ffc107', 
-                            'commander': '#28a745',
-                            'security_officer': '#dc3545'
-                        };
-                        
-                        const typeNames = {
-                            'pass_desk': 'Pass Desk',
-                            'supervisor': 'Supervisor',
-                            'commander': 'Commander',
-                            'security_officer': 'Security Officer'
-                        };
-                        
-                        userElement.innerHTML = `
-                            <div style="display: flex; justify-content: space-between; align-items: start;">
-                                <div style="flex: 1;">
-                                    <h4 style="margin: 0 0 0.5rem 0; color: #003366;">${user.first_name} ${user.last_name}</h4>
-                                    <p style="margin: 0.25rem 0;"><strong>Username:</strong> ${user.username}</p>
-                                    <p style="margin: 0.25rem 0;"><strong>Email:</strong> ${user.email}</p>
-                                    <p style="margin: 0.25rem 0;"><strong>Security #:</strong> ${user.security_number}</p>
-                                    <p style="margin: 0.25rem 0;"><strong>Unit:</strong> ${user.unit}</p>
-                                    <p style="margin: 0.25rem 0;"><strong>Phone:</strong> ${user.phone_number || 'Not set'}</p>
-                                </div>
-                                <div style="text-align: right;">
-                                    <span style="background: ${typeColors[user.user_type]}; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;">
-                                        ${typeNames[user.user_type]}
-                                    </span>
-                                    <p style="margin: 0.5rem 0 0 0; font-size: 0.8rem; color: #666;">
-                                        Joined: ${new Date(user.date_joined).toLocaleDateString()}
-                                    </p>
-                                    <p style="margin: 0.25rem 0; font-size: 0.8rem; color: ${user.is_verified ? '#28a745' : '#dc3545'};">
-                                        ${user.is_verified ? '✓ Verified' : '✗ Not Verified'}
-                                    </p>
-                                </div>
-                            </div>
-                        `;
-                        usersContainer.appendChild(userElement);
-                    });
-                } else {
-                    usersContainer.innerHTML = '<p>No users found.</p>';
-                }
-            }
-        } catch (error) {
-            console.error('Error loading users:', error);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Management - AFZ Identity System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-    }
 
-    // Handle form submission
-    document.getElementById('userForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        const formData = {
-            username: document.getElementById('username').value,
-            email: document.getElementById('email').value,
-            first_name: document.getElementById('first_name').value,
-            last_name: document.getElementById('last_name').value,
-            user_type: document.getElementById('user_type').value,
-            phone_number: document.getElementById('phone_number').value,
-            unit: document.getElementById('unit').value,
-            password: document.getElementById('password').value,
-            password_confirm: document.getElementById('password').value,
-            security_number: generateSecurityNumber()
-        };
-        
-        try {
-            const response = await fetch('/api/users/users/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrftoken
-                },
-                body: JSON.stringify(formData)
-            });
-            
-            if (response.ok) {
-                alert('User created successfully! Security Number: ' + formData.security_number);
-                document.getElementById('userForm').reset();
-                loadUsers(); // Refresh the list
-            } else {
-                const errorData = await response.json();
-                alert('Error creating user: ' + (JSON.stringify(errorData) || 'Unknown error'));
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            alert('Network error. Please try again.');
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
         }
-    });
 
-    // Search functionality
-    document.getElementById('searchUsers').addEventListener('input', function(e) {
-        const searchTerm = e.target.value.toLowerCase();
-        const userElements = document.querySelectorAll('#usersList > div');
-        
-        userElements.forEach(element => {
-            const text = element.textContent.toLowerCase();
-            if (text.includes(searchTerm)) {
-                element.style.display = 'block';
-            } else {
-                element.style.display = 'none';
+        .navbar {
+            background: #003366;
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .navbar-brand {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #FFD700;
+        }
+
+        .navbar-nav {
+            display: flex;
+            list-style: none;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .navbar-nav a {
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+
+        .navbar-nav a:hover,
+        .navbar-nav a.active {
+            background-color: #004080;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .page-header h1 {
+            color: #003366;
+            margin-bottom: 0.5rem;
+        }
+
+        .users-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .user-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 3px 15px rgba(0,0,0,0.1);
+            border-left: 4px solid #003366;
+        }
+
+        .user-name {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #003366;
+            margin-bottom: 0.5rem;
+        }
+
+        .user-detail {
+            margin-bottom: 0.5rem;
+            color: #666;
+        }
+
+        .status-verified {
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .status-pending {
+            color: #ffc107;
+            font-weight: bold;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
             }
-        });
-    });
+            
+            .users-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .navbar {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-brand">
+            Air Force Zimbabwe - User Management
+        </div>
+        <ul class="navbar-nav">
+            <li><a href="/">Home</a></li>
+            <li><a href="/verification/dashboard/">Dashboard</a></li>
+            <li><a href="/verification/user-management/" class="active">User Management</a></li>
+            <li><a href="/verification/visitor-management/">Visitor Management</a></li>
+            <li><a href="/verification/login/">Face Login</a></li>
+            <li><a href="/admin/">Admin</a></li>
+        </ul>
+    </nav>
     
-    // Load data when page loads
-    window.addEventListener('load', loadUsers);
-</script>
-{% endblock %}
+    <div class="container">
+        <div class="page-header">
+            <h1>User Management</h1>
+            <p>Manage system users and their access permissions</p>
+        </div>
+
+        <div class="users-grid">
+            {% for user in users %}
+            <div class="user-card">
+                <div class="user-name">{{ user.username }}</div>
+                <div class="user-detail"><strong>Security Number:</strong> {{ user.security_number }}</div>
+                <div class="user-detail"><strong>Unit:</strong> {{ user.unit }}</div>
+                <div class="user-detail"><strong>User Type:</strong> {{ user.get_user_type_display }}</div>
+                <div class="user-detail">
+                    <strong>Status:</strong> 
+                    {% if user.is_verified %}
+                    <span class="status-verified">✅ Verified</span>
+                    {% else %}
+                    <span class="status-pending">⏳ Pending</span>
+                    {% endif %}
+                </div>
+                <div class="user-detail"><strong>Joined:</strong> {{ user.date_joined|date:"M d, Y" }}</div>
+            </div>
+            {% empty %}
+            <div class="no-users" style="text-align: center; grid-column: 1 / -1; padding: 3rem; color: #666;">
+                No users found in the system.
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</body>
+</html>

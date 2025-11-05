@@ -1,179 +1,166 @@
-{% extends 'base.html' %}
-{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visitor Management - AFZ Identity System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-{% block content %}
-<div class="card">
-    <h2 style="color: #003366; margin-bottom: 2rem;">Visitor Management - Air Force of Zimbabwe</h2>
-    
-    <div class="card" style="margin-bottom: 2rem;">
-        <h3 style="color: #003366; margin-bottom: 1rem;">Add New Visitor</h3>
-        <form id="visitorForm">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                <div class="form-group">
-                    <label for="full_name">Full Name *</label>
-                    <input type="text" id="full_name" name="full_name" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="id_number">ID Number *</label>
-                    <input type="text" id="id_number" name="id_number" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="phone_number">Phone Number *</label>
-                    <input type="tel" id="phone_number" name="phone_number" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="email">Email</label>
-                    <input type="email" id="email" name="email">
-                </div>
-                
-                <div class="form-group" style="grid-column: span 2;">
-                    <label for="purpose_of_visit">Purpose of Visit *</label>
-                    <textarea id="purpose_of_visit" name="purpose_of_visit" rows="3" required></textarea>
-                </div>
-                
-                <div class="form-group">
-                    <label for="expected_duration">Expected Duration (minutes) *</label>
-                    <input type="number" id="expected_duration" name="expected_duration" value="60" min="15" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="host_member">Host Member *</label>
-                    <select id="host_member" name="host_member" required>
-                        <option value="">Select Host Member</option>
-                    </select>
-                </div>
-            </div>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .navbar {
+            background: #003366;
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .navbar-brand {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #FFD700;
+        }
+
+        .navbar-nav {
+            display: flex;
+            list-style: none;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .navbar-nav a {
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+
+        .navbar-nav a:hover,
+        .navbar-nav a.active {
+            background-color: #004080;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .page-header h1 {
+            color: #003366;
+            margin-bottom: 0.5rem;
+        }
+
+        .visitors-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .visitor-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 3px 15px rgba(0,0,0,0.1);
+            border-left: 4px solid #003366;
+        }
+
+        .visitor-name {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #003366;
+            margin-bottom: 0.5rem;
+        }
+
+        .visitor-detail {
+            margin-bottom: 0.5rem;
+            color: #666;
+        }
+
+        .status-pending { color: #ffc107; font-weight: bold; }
+        .status-approved { color: #28a745; font-weight: bold; }
+        .status-rejected { color: #dc3545; font-weight: bold; }
+        .status-active { color: #17a2b8; font-weight: bold; }
+        .status-completed { color: #6c757d; font-weight: bold; }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
             
-            <button type="submit" class="btn" style="margin-top: 1rem; background: #003366; color: white;">Add Visitor</button>
-        </form>
-    </div>
+            .visitors-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .navbar {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-brand">
+            Air Force Zimbabwe - Visitor Management
+        </div>
+        <ul class="navbar-nav">
+            <li><a href="/">Home</a></li>
+            <li><a href="/verification/dashboard/">Dashboard</a></li>
+            <li><a href="/verification/user-management/">User Management</a></li>
+            <li><a href="/verification/visitor-management/" class="active">Visitor Management</a></li>
+            <li><a href="/verification/login/">Face Login</a></li>
+            <li><a href="/admin/">Admin</a></li>
+        </ul>
+    </nav>
     
-    <div class="card">
-        <h3 style="color: #003366; margin-bottom: 1rem;">Recent Visitors</h3>
-        <div id="visitorsList">
-            <p>Loading visitors...</p>
+    <div class="container">
+        <div class="page-header">
+            <h1>Visitor Management</h1>
+            <p>Manage visitor access and approvals</p>
+        </div>
+
+        <div class="visitors-grid">
+            {% for visitor in visitors %}
+            <div class="visitor-card">
+                <div class="visitor-name">{{ visitor.full_name }}</div>
+                <div class="visitor-detail"><strong>Visitor ID:</strong> {{ visitor.visitor_id }}</div>
+                <div class="visitor-detail"><strong>ID Number:</strong> {{ visitor.id_number }}</div>
+                <div class="visitor-detail"><strong>Phone:</strong> {{ visitor.phone_number }}</div>
+                <div class="visitor-detail"><strong>Host:</strong> {{ visitor.host_member.username }}</div>
+                <div class="visitor-detail"><strong>Purpose:</strong> {{ visitor.purpose_of_visit }}</div>
+                <div class="visitor-detail">
+                    <strong>Status:</strong> 
+                    <span class="status-{{ visitor.status }}">{{ visitor.get_status_display }}</span>
+                </div>
+                <div class="visitor-detail"><strong>Created:</strong> {{ visitor.created_at|date:"M d, Y H:i" }}</div>
+            </div>
+            {% empty %}
+            <div class="no-visitors" style="text-align: center; grid-column: 1 / -1; padding: 3rem; color: #666;">
+                No visitors found in the system.
+            </div>
+            {% endfor %}
         </div>
     </div>
-</div>
-
-<script>
-    // Load host members and visitors
-    async function loadVisitorData() {
-        try {
-            // Load host members
-            const membersResponse = await fetch('/api/users/users/');
-            if (membersResponse.ok) {
-                const membersData = await membersResponse.json();
-                const hostSelect = document.getElementById('host_member');
-                hostSelect.innerHTML = '<option value="">Select Host Member</option>';
-                
-                membersData.forEach(member => {
-                    const option = document.createElement('option');
-                    option.value = member.id;
-                    option.textContent = `${member.first_name} ${member.last_name} (${member.unit})`;
-                    hostSelect.appendChild(option);
-                });
-            }
-            
-            // Load visitors
-            const visitorsResponse = await fetch('/api/users/visitors/');
-            if (visitorsResponse.ok) {
-                const visitorsData = await visitorsResponse.json();
-                const visitorsContainer = document.getElementById('visitorsList');
-                visitorsContainer.innerHTML = '';
-                
-                if (visitorsData.length > 0) {
-                    visitorsData.forEach(visitor => {
-                        const visitorElement = document.createElement('div');
-                        visitorElement.style.padding = '1rem';
-                        visitorElement.style.border = '1px solid #e0e0e0';
-                        visitorElement.style.borderRadius = '6px';
-                        visitorElement.style.marginBottom = '1rem';
-                        visitorElement.style.background = '#f8f9fa';
-                        
-                        const statusColors = {
-                            'pending': '#ffc107',
-                            'approved': '#28a745',
-                            'rejected': '#dc3545',
-                            'active': '#17a2b8',
-                            'completed': '#6c757d',
-                            'overstayed': '#dc3545'
-                        };
-                        
-                        visitorElement.innerHTML = `
-                            <div style="display: flex; justify-content: space-between; align-items: start;">
-                                <div>
-                                    <h4 style="margin: 0 0 0.5rem 0; color: #003366;">${visitor.full_name}</h4>
-                                    <p style="margin: 0.25rem 0;"><strong>ID:</strong> ${visitor.id_number}</p>
-                                    <p style="margin: 0.25rem 0;"><strong>Phone:</strong> ${visitor.phone_number}</p>
-                                    <p style="margin: 0.25rem 0;"><strong>Purpose:</strong> ${visitor.purpose_of_visit}</p>
-                                    <p style="margin: 0.25rem 0;"><strong>Host:</strong> ${visitor.host_member_name}</p>
-                                    <p style="margin: 0.25rem 0;"><strong>Duration:</strong> ${visitor.expected_duration} minutes</p>
-                                </div>
-                                <div style="text-align: right;">
-                                    <span style="background: ${statusColors[visitor.status]}; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem; text-transform: capitalize;">
-                                        ${visitor.status}
-                                    </span>
-                                    <p style="margin: 0.5rem 0 0 0; font-size: 0.8rem; color: #666;">
-                                        Created: ${new Date(visitor.created_at).toLocaleDateString()}
-                                    </p>
-                                </div>
-                            </div>
-                        `;
-                        visitorsContainer.appendChild(visitorElement);
-                    });
-                } else {
-                    visitorsContainer.innerHTML = '<p>No visitors found.</p>';
-                }
-            }
-            
-        } catch (error) {
-            console.error('Error loading visitor data:', error);
-        }
-    }
-    
-    // Handle form submission
-    document.getElementById('visitorForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        const formData = {
-            full_name: document.getElementById('full_name').value,
-            id_number: document.getElementById('id_number').value,
-            phone_number: document.getElementById('phone_number').value,
-            email: document.getElementById('email').value,
-            purpose_of_visit: document.getElementById('purpose_of_visit').value,
-            expected_duration: parseInt(document.getElementById('expected_duration').value),
-            host_member: parseInt(document.getElementById('host_member').value)
-        };
-        
-        try {
-            const response = await fetch('/api/users/visitors/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrftoken
-                },
-                body: JSON.stringify(formData)
-            });
-            
-            if (response.ok) {
-                alert('Visitor added successfully!');
-                document.getElementById('visitorForm').reset();
-                loadVisitorData(); // Refresh the list
-            } else {
-                const errorData = await response.json();
-                alert('Error adding visitor: ' + (errorData.error || 'Unknown error'));
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            alert('Network error. Please try again.');
-        }
-    });
-    
-    // Load data when page loads
-    window.addEventListener('load', loadVisitorData);
-</script>
-{% endblock %}
+</body>
+</html>
