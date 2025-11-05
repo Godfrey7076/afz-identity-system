@@ -3,8 +3,9 @@
 
 {% block content %}
 <div class="card">
-    <h2 style="color: #003366; margin-bottom: 2rem;">Dashboard - Air Force Zimbabwe</h2>
+    <h2 style="color: #003366; margin-bottom: 2rem;">Dashboard - Air Force of Zimbabwe</h2>
     
+    <!-- Quick Stats -->
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
         <div class="card" style="text-align: center; background: linear-gradient(135deg, #003366, #004080); color: white;">
             <h3>Today's Logins</h3>
@@ -27,6 +28,18 @@
         </div>
     </div>
     
+    <!-- Notifications Panel -->
+    <div class="card">
+        <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 1rem;">
+            <h3 style="color: #003366; margin: 0;">Recent Notifications</h3>
+            <button class="btn btn-warning" onclick="markAllNotificationsRead()" style="padding: 0.5rem 1rem;">Mark All as Read</button>
+        </div>
+        <div id="notificationsPanel" style="min-height: 150px;">
+            <p>Loading notifications...</p>
+        </div>
+    </div>
+    
+    <!-- Recent Access Logs -->
     <div class="card">
         <h3 style="color: #003366; margin-bottom: 1rem;">Recent Access Logs</h3>
         <div id="recentLogs" style="min-height: 200px;">
@@ -34,13 +47,16 @@
         </div>
     </div>
 
+    <!-- Quick Actions -->
     <div class="card">
         <h3 style="color: #003366; margin-bottom: 1rem;">Quick Actions</h3>
         <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
             <button class="btn" onclick="window.location.href='/login/'">Face Verification</button>
+            <button class="btn" onclick="window.location.href='/user-management/'">Manage Users</button>
             <button class="btn" onclick="window.location.href='/visitor-management/'">Manage Visitors</button>
             <button class="btn" onclick="generateReport()">Generate Report</button>
             <button class="btn" onclick="viewSecurityLogs()">Security Logs</button>
+            <button class="btn btn-warning" onclick="refreshDashboard()">Refresh Data</button>
         </div>
     </div>
 </div>
@@ -49,6 +65,9 @@
     // Dashboard data loading
     async function loadDashboardData() {
         try {
+            // Load notifications
+            await loadNotifications();
+            
             // Load recent access logs
             const logsResponse = await fetch('/api/verification/access-logs/');
             if (logsResponse.ok) {
@@ -95,12 +114,107 @@
         }
     }
 
+    // Load notifications
+    async function loadNotifications() {
+        try {
+            const response = await fetch('/api/notifications/notifications/recent/');
+            if (response.ok) {
+                const notifications = await response.json();
+                const notificationsContainer = document.getElementById('notificationsPanel');
+                notificationsContainer.innerHTML = '';
+                
+                if (notifications.length > 0) {
+                    notifications.forEach(notification => {
+                        const notificationElement = document.createElement('div');
+                        notificationElement.style.padding = '0.75rem';
+                        notificationElement.style.borderLeft = `4px solid ${getNotificationColor(notification.notification_type)}`;
+                        notificationElement.style.background = notification.is_read ? '#f8f9fa' : '#e7f3ff';
+                        notificationElement.style.marginBottom = '0.5rem';
+                        notificationElement.style.borderRadius = '4px';
+                        notificationElement.style.cursor = 'pointer';
+                        
+                        notificationElement.innerHTML = `
+                            <div style="display: flex; justify-content: space-between; align-items: start;">
+                                <div style="flex: 1;">
+                                    <strong style="color: #003366;">${notification.title}</strong>
+                                    <p style="margin: 0.25rem 0 0 0; color: #666; font-size: 0.9rem;">${notification.message}</p>
+                                </div>
+                                <div style="text-align: right;">
+                                    <span style="background: ${getNotificationColor(notification.notification_type)}; color: white; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.7rem;">
+                                        ${notification.notification_type.replace('_', ' ')}
+                                    </span>
+                                    <p style="margin: 0.5rem 0 0 0; font-size: 0.8rem; color: #999;">
+                                        ${new Date(notification.created_at).toLocaleString()}
+                                    </p>
+                                </div>
+                            </div>
+                        `;
+                        
+                        notificationElement.onclick = () => markNotificationRead(notification.id);
+                        notificationsContainer.appendChild(notificationElement);
+                    });
+                } else {
+                    notificationsContainer.innerHTML = '<p>No notifications.</p>';
+                }
+            }
+        } catch (error) {
+            console.error('Error loading notifications:', error);
+        }
+    }
+
+    function getNotificationColor(type) {
+        const colors = {
+            'overstay': '#dc3545',
+            'security_breach': '#dc3545',
+            'visitor_approval': '#ffc107',
+            'system_alert': '#17a2b8',
+            'reminder': '#6c757d',
+            'access_granted': '#28a745',
+            'access_denied': '#dc3545'
+        };
+        return colors[type] || '#6c757d';
+    }
+
+    async function markNotificationRead(notificationId) {
+        try {
+            await fetch(`/api/notifications/notifications/${notificationId}/mark_read/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrftoken
+                }
+            });
+            loadNotifications(); // Refresh the list
+        } catch (error) {
+            console.error('Error marking notification as read:', error);
+        }
+    }
+
+    async function markAllNotificationsRead() {
+        try {
+            await fetch('/api/notifications/notifications/mark_all_read/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrftoken
+                }
+            });
+            loadNotifications(); // Refresh the list
+            showNotification('All notifications marked as read', 'success');
+        } catch (error) {
+            console.error('Error marking all notifications as read:', error);
+        }
+    }
+
     function generateReport() {
-        alert('Report generation feature will be implemented soon.');
+        showNotification('Report generation feature will be implemented soon.', 'info');
     }
 
     function viewSecurityLogs() {
-        alert('Security logs feature will be implemented soon.');
+        showNotification('Security logs feature will be implemented soon.', 'info');
+    }
+
+    function refreshDashboard() {
+        loadDashboardData();
+        showNotification('Dashboard data refreshed', 'success');
     }
     
     // Load data when page loads
