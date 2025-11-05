@@ -1,14 +1,10 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth.decorators import login_required
+from django.shortcuts import render, get_object_or_404
 from django.contrib.admin.views.decorators import staff_member_required
-from django.utils.decorators import method_decorator
 from django.contrib import messages
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
 from .models import FaceVerificationSession, AccessLog
 from .serializers import FaceVerificationSessionSerializer, AccessLogSerializer
 from .face_utils import face_system
@@ -293,3 +289,25 @@ def face_verification_status(request):
             'success': False,
             'message': 'User not found'
         })
+
+
+# ADD THIS MISSING FUNCTION
+def api_info(request):
+    """Provide API information"""
+    info = {
+        'name': 'Face Recognition API',
+        'version': '1.0.0',
+        'endpoints': {
+            'face_login': '/verification/login/',
+            'face_verification': '/verification/api/verification/verify_face/',
+            'face_registration': '/verification/api/verification/register_face/',
+            'check_registration': '/verification/api/verification/check_registration/',
+            'admin_registration': '/verification/admin/register-face/<user_id>/',
+            'access_logs': '/verification/api/access-logs/',
+        },
+        'authentication_methods': [
+            'Face Recognition',
+            'Security Number'
+        ]
+    }
+    return JsonResponse(info)

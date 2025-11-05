@@ -6,7 +6,8 @@ from .views import (
     AccessLogViewSet,
     admin_face_registration,
     face_login_view,
-    face_verification_status
+    face_verification_status,
+    api_info  # Add this import
 )
 
 # Initialize router
@@ -30,10 +31,6 @@ urlpatterns = [
     # Status check endpoint
     path('status/', face_verification_status, name='face_verification_status'),
 
-    # Additional utility endpoints can be added here
-]
-
-# Optional: Add API info endpoint
-urlpatterns += [
-    path('api/info/', views.api_info, name='api_info'),
+    # API info endpoint - moved inside main urlpatterns
+    path('api/info/', api_info, name='api_info'),
 ]

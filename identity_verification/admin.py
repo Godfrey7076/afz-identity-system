@@ -4,38 +4,34 @@ from .models import FaceVerificationSession, AccessLog
 
 @admin.register(FaceVerificationSession)
 class FaceVerificationSessionAdmin(admin.ModelAdmin):
-    list_display = ('user', 'session_id', 'verification_type',
-                    'status', 'created_at', 'confidence_score')
-    list_filter = ('verification_type', 'status', 'created_at')
-    search_fields = ('user__username', 'session_id', 'security_number')
-    readonly_fields = ('session_id', 'created_at', 'completed_at')
+    list_display = ('user', 'session_id', 'created_at', 'is_active')
+    list_filter = ('is_active', 'created_at')
+    search_fields = ('user__username', 'session_id')
+    readonly_fields = ('session_id', 'created_at')
 
     fieldsets = (
         ('Session Information', {
-            'fields': ('user', 'session_id', 'security_number', 'verification_type')
+            'fields': ('user', 'session_id')
         }),
         ('Status', {
-            'fields': ('status', 'confidence_score', 'created_at', 'completed_at')
+            'fields': ('is_active', 'created_at')
         }),
     )
 
 
 @admin.register(AccessLog)
 class AccessLogAdmin(admin.ModelAdmin):
-    list_display = ('user', 'visitor', 'action',
-                    'verified_by_face', 'timestamp', 'location')
-    list_filter = ('action', 'verified_by_face', 'timestamp')
-    search_fields = ('user__username', 'visitor__full_name', 'location')
+    list_display = ('user', 'timestamp', 'verification_method',
+                    'success', 'confidence_score')
+    list_filter = ('verification_method', 'success', 'timestamp')
+    search_fields = ('user__username', 'user__security_number')
     readonly_fields = ('timestamp',)
 
     fieldsets = (
         ('Access Information', {
-            'fields': ('user', 'visitor', 'action', 'location')
+            'fields': ('user', 'verification_method', 'success')
         }),
-        ('Verification', {
-            'fields': ('verified_by_face', 'ip_address', 'user_agent')
-        }),
-        ('Timing', {
-            'fields': ('timestamp',)
+        ('Verification Details', {
+            'fields': ('confidence_score', 'timestamp')
         }),
     )
