@@ -9,6 +9,7 @@ class FaceVerificationSessionAdmin(admin.ModelAdmin):
     list_filter = ('verification_type', 'status', 'created_at')
     search_fields = ('user__username', 'session_id', 'security_number')
     readonly_fields = ('session_id', 'created_at', 'completed_at')
+
     fieldsets = (
         ('Session Information', {
             'fields': ('user', 'session_id', 'security_number', 'verification_type')
@@ -26,6 +27,7 @@ class AccessLogAdmin(admin.ModelAdmin):
     list_filter = ('action', 'verified_by_face', 'timestamp')
     search_fields = ('user__username', 'visitor__full_name', 'location')
     readonly_fields = ('timestamp',)
+
     fieldsets = (
         ('Access Information', {
             'fields': ('user', 'visitor', 'action', 'location')

@@ -1,74 +1,52 @@
-import json
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required
+from django.contrib.admin.views.decorators import staff_member_required
+from django.utils.decorators import method_decorator
+from django.contrib import messages
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from .models import FaceVerificationSession, AccessLog
+from .serializers import FaceVerificationSessionSerializer, AccessLogSerializer
+from .face_utils import face_system
+from users.models import CustomUser
 import base64
 import cv2
 import numpy as np
-from django.http import JsonResponse
-from rest_framework import viewsets, status, permissions
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from .models import FaceVerificationSession, AccessLog
-from .serializers import (
-    FaceVerificationSessionSerializer,
-    AccessLogSerializer,
-    FaceVerificationRequestSerializer,
-    FaceCaptureSerializer
-)
-from .face_utils import face_system
-from users.models import CustomUser
 import logging
 
 logger = logging.getLogger(__name__)
 
 
 class FaceVerificationViewSet(viewsets.ViewSet):
+    """
+    ViewSet for handling face verification operations
+    """
 
-    @action(detail=False, methods=['post'], permission_classes=[])
-    def start_verification(self, request):
-        serializer = FaceVerificationRequestSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        security_number = serializer.validated_data['security_number']
-        verification_type = serializer.validated_data['verification_type']
-
-        try:
-            user = CustomUser.objects.get(security_number=security_number)
-
-            # Create verification session
-            session = FaceVerificationSession.objects.create(
-                user=user,
-                security_number=security_number,
-                verification_type=verification_type
-            )
-
-            # Load face encodings if not already loaded
-            if not face_system.known_face_encodings:
-                users_with_faces = CustomUser.objects.exclude(face_encoding='')
-                face_system.load_user_face_encodings(users_with_faces)
-
-            return Response({
-                'session_id': str(session.session_id),
-                'message': 'Face verification session started. Please look at the camera.',
-                'user': user.username
-            })
-        except CustomUser.DoesNotExist:
-            return Response({'error': 'Invalid security number'}, status=status.HTTP_400_BAD_REQUEST)
-
-    @action(detail=False, methods=['post'], permission_classes=[])
+    @action(detail=False, methods=['post'])
     def verify_face(self, request):
-        serializer = FaceCaptureSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        session_id = serializer.validated_data['session_id']
-        image_data = serializer.validated_data['image']
-
+        """Verify face against stored encoding"""
         try:
-            session = FaceVerificationSession.objects.get(
-                session_id=session_id)
+            security_number = request.data.get('security_number')
+            image_data = request.data.get('image')
 
-            if session.status != 'pending':
-                return Response({'error': 'Session already completed'}, status=status.HTTP_400_BAD_REQUEST)
+            if not security_number or not image_data:
+                return Response({
+                    'success': False,
+                    'message': 'Security number and image are required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Get user by security number
+            try:
+                user = CustomUser.objects.get(security_number=security_number)
+            except CustomUser.DoesNotExist:
+                return Response({
+                    'success': False,
+                    'message': 'User not found'
+                }, status=status.HTTP_404_NOT_FOUND)
 
             # Decode base64 image
             try:
@@ -79,58 +57,239 @@ class FaceVerificationViewSet(viewsets.ViewSet):
                 frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
                 if frame is None:
-                    return Response({'error': 'Invalid image data'}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({
+                        'success': False,
+                        'message': 'Invalid image data'
+                    }, status=status.HTTP_400_BAD_REQUEST)
 
             except Exception as e:
                 logger.error(f"Image decoding error: {e}")
-                return Response({'error': 'Invalid image format'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({
+                    'success': False,
+                    'message': 'Invalid image format'
+                }, status=status.HTTP_400_BAD_REQUEST)
 
-            # Verify face
-            is_verified, message, confidence = face_system.verify_face(
-                frame, session.user)
+            # Check if user has face registered
+            if not user.face_encoding:
+                return Response({
+                    'success': False,
+                    'message': 'No face registered for this user. Please contact administrator.'
+                }, status=status.HTTP_400_BAD_REQUEST)
 
-            if is_verified:
-                session.status = 'success'
-                session.confidence_score = confidence
-                session.save()
+            # Capture and encode face from current frame
+            encoding, message = face_system.capture_and_encode_face(frame)
 
-                # Log access
+            if encoding is not None:
+                # Verify against stored encoding
+                is_match, distance = face_system.verify_face(
+                    encoding, user.face_encoding)
+
+                if is_match and distance < 0.6:  # Distance threshold
+                    # Create access log
+                    AccessLog.objects.create(
+                        user=user,
+                        verification_method='face',
+                        success=True,
+                        confidence_score=1 - distance
+                    )
+
+                    return Response({
+                        'success': True,
+                        'message': 'Face verification successful',
+                        'user': {
+                            'id': user.id,
+                            'username': user.username,
+                            'security_number': user.security_number,
+                            'unit': user.unit
+                        },
+                        'confidence': 1 - distance
+                    })
+                else:
+                    # Log failed attempt
+                    AccessLog.objects.create(
+                        user=user,
+                        verification_method='face',
+                        success=False,
+                        confidence_score=1 - distance
+                    )
+
+                    return Response({
+                        'success': False,
+                        'message': 'Face verification failed. Please try again.'
+                    }, status=status.HTTP_401_UNAUTHORIZED)
+            else:
+                return Response({
+                    'success': False,
+                    'message': message
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            logger.error(f"Face verification error: {e}")
+            return Response({
+                'success': False,
+                'message': 'Internal server error'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['post'])
+    def register_face(self, request):
+        """Register a new face for a user"""
+        user_id = request.data.get('user_id')
+        image_data = request.data.get('image')
+
+        if not user_id or not image_data:
+            return Response({
+                'success': False,
+                'message': 'User ID and image are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = CustomUser.objects.get(id=user_id)
+
+            # Decode base64 image
+            try:
+                if ',' in image_data:
+                    image_data = image_data.split(',')[1]
+                image_data = base64.b64decode(image_data)
+                nparr = np.frombuffer(image_data, np.uint8)
+                frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+                if frame is None:
+                    return Response({
+                        'success': False,
+                        'message': 'Invalid image data'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            except Exception as e:
+                logger.error(f"Image decoding error: {e}")
+                return Response({
+                    'success': False,
+                    'message': 'Invalid image format'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Capture and encode face
+            encoding, message = face_system.capture_and_encode_face(frame)
+
+            if encoding is not None:
+                # Convert encoding to string for storage
+                encoding_str = ','.join(str(x) for x in encoding)
+                user.face_encoding = encoding_str
+                user.is_verified = True
+                user.save()
+
+                # Log the registration
                 AccessLog.objects.create(
-                    user=session.user,
-                    action=session.verification_type,
-                    verified_by_face=True,
-                    location='Webcam Station'
+                    user=user,
+                    verification_method='registration',
+                    success=True,
+                    confidence_score=1.0
                 )
 
                 return Response({
-                    'verified': True,
-                    'message': message,
-                    'user': session.user.username,
-                    'user_type': session.user.user_type,
-                    'confidence': confidence
+                    'success': True,
+                    'message': 'Face registered successfully',
+                    'user': {
+                        'id': user.id,
+                        'username': user.username,
+                        'security_number': user.security_number
+                    }
                 })
             else:
-                session.status = 'failed'
-                session.confidence_score = confidence
-                session.save()
                 return Response({
-                    'verified': False,
-                    'message': message,
-                    'confidence': confidence
+                    'success': False,
+                    'message': message
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-        except FaceVerificationSession.DoesNotExist:
-            return Response({'error': 'Invalid session'}, status=status.HTTP_400_BAD_REQUEST)
+        except CustomUser.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': 'User not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Face registration error: {e}")
+            return Response({
+                'success': False,
+                'message': 'Internal server error'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'])
+    def check_registration(self, request):
+        """Check if a user has face registered"""
+        security_number = request.GET.get('security_number')
+
+        if not security_number:
+            return Response({
+                'success': False,
+                'message': 'Security number is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = CustomUser.objects.get(security_number=security_number)
+            return Response({
+                'success': True,
+                'registered': bool(user.face_encoding),
+                'user': {
+                    'id': user.id,
+                    'username': user.username,
+                    'security_number': user.security_number,
+                    'unit': user.unit
+                }
+            })
+        except CustomUser.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': 'User not found'
+            }, status=status.HTTP_404_NOT_FOUND)
 
 
 class AccessLogViewSet(viewsets.ModelViewSet):
+    """ViewSet for accessing access logs"""
     queryset = AccessLog.objects.all().order_by('-timestamp')
     serializer_class = AccessLogSerializer
-    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        user = self.request.user
-        if user.user_type in ['commander', 'supervisor']:
-            return AccessLog.objects.all()
-        else:
-            return AccessLog.objects.filter(user=user)
+        """Filter logs based on user permissions"""
+        queryset = super().get_queryset()
+
+        # If user is staff, show all logs
+        if self.request.user.is_staff:
+            return queryset
+
+        # Otherwise, only show user's own logs
+        return queryset.filter(user=self.request.user)
+
+
+@staff_member_required
+def admin_face_registration(request, user_id):
+    """Admin view for face registration"""
+    user = get_object_or_404(CustomUser, id=user_id)
+    return render(request, 'admin/face_registration.html', {'user': user})
+
+
+def face_login_view(request):
+    """Main face login interface"""
+    return render(request, 'face_login.html')
+
+
+def face_verification_status(request):
+    """Check face verification status for a user"""
+    security_number = request.GET.get('security_number')
+
+    if not security_number:
+        return JsonResponse({
+            'success': False,
+            'message': 'Security number is required'
+        })
+
+    try:
+        user = CustomUser.objects.get(security_number=security_number)
+        return JsonResponse({
+            'success': True,
+            'registered': bool(user.face_encoding),
+            'username': user.username,
+            'unit': user.unit
+        })
+    except CustomUser.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'message': 'User not found'
+        })
