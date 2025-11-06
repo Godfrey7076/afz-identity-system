@@ -12,7 +12,8 @@ from .views import (
     user_management_view,
     visitor_management_view,
     admin_login_view,
-    admin_logout_view
+    admin_logout_view,
+    RealTimeDataView
 )
 
 # Initialize router
@@ -44,6 +45,9 @@ urlpatterns = [
     path('dashboard/', DashboardView.as_view(), name='dashboard'),
     path('user-management/', user_management_view, name='user_management'),
     path('visitor-management/', visitor_management_view, name='visitor_management'),
+
+    # Real-time data API
+    path('api/realtime-data/', RealTimeDataView.as_view(), name='realtime_data'),
 
     # API info endpoint
     path('api/info/', api_info, name='api_info'),

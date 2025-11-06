@@ -1,22 +1,552 @@
-<nav class="navbar">
-    <div class="navbar-brand">
-        Air Force of Zimbabwe - Identity Verification System
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Air Force of Zimbabwe - Identity Verification System</title>
+    <style>
+        :root {
+            --airforce-blue: #003366;
+            --airforce-gold: #FFD700;
+            --airforce-dark-blue: #004080;
+            --airforce-light-blue: #00509e;
+            --airforce-white: #ffffff;
+            --airforce-gray: #f8f9fa;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--airforce-blue) 0%, var(--airforce-dark-blue) 100%);
+            color: #333;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: var(--airforce-blue);
+            color: var(--airforce-white);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.2);
+            border-bottom: 4px solid var(--airforce-gold);
+            position: relative;
+        }
+
+        .navbar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, var(--airforce-gold), transparent);
+        }
+
+        .navbar-brand {
+            font-size: 1.6rem;
+            font-weight: bold;
+            color: var(--airforce-gold);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .navbar-brand::before {
+            content: '🛡️';
+            font-size: 1.8rem;
+        }
+
+        .navbar-nav {
+            display: flex;
+            list-style: none;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .navbar-nav a {
+            color: var(--airforce-white);
+            text-decoration: none;
+            padding: 0.75rem 1.25rem;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            border: 1px solid transparent;
+        }
+
+        .navbar-nav a:hover {
+            background: var(--airforce-dark-blue);
+            transform: translateY(-2px);
+            border-color: var(--airforce-gold);
+            box-shadow: 0 4px 12px rgba(255,215,0,0.2);
+        }
+
+        .navbar-nav a.active {
+            background: var(--airforce-gold);
+            color: var(--airforce-blue);
+            font-weight: 600;
+            border-color: var(--airforce-gold);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .hero {
+            background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,249,250,0.98));
+            border-radius: 20px;
+            padding: 3rem;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+            margin-bottom: 3rem;
+            border: 2px solid var(--airforce-gold);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(90deg, var(--airforce-blue), var(--airforce-gold), var(--airforce-blue));
+        }
+
+        .hero h1 {
+            color: var(--airforce-blue);
+            margin-bottom: 1rem;
+            font-size: 3rem;
+            font-weight: 700;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .hero p {
+            color: #666;
+            font-size: 1.3rem;
+            margin-bottom: 2rem;
+            font-weight: 500;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 1.5rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 2rem;
+        }
+
+        .btn {
+            padding: 1rem 2.5rem;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            min-width: 200px;
+            justify-content: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--airforce-blue), var(--airforce-dark-blue));
+            color: var(--airforce-white);
+            border: 2px solid var(--airforce-gold);
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--airforce-dark-blue), var(--airforce-blue));
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0,51,102,0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, var(--airforce-gold), #ffed4e);
+            color: var(--airforce-blue);
+            border: 2px solid var(--airforce-gold);
+        }
+
+        .btn-secondary:hover {
+            background: linear-gradient(135deg, #ffed4e, var(--airforce-gold));
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(255,215,0,0.4);
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .feature-card {
+            background: var(--airforce-white);
+            padding: 2.5rem 2rem;
+            border-radius: 15px;
+            box-shadow: 0 5px 25px rgba(0,0,0,0.1);
+            text-align: center;
+            border-left: 5px solid var(--airforce-blue);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--airforce-gold);
+        }
+
+        .feature-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 12px 35px rgba(0,0,0,0.15);
+        }
+
+        .feature-card h3 {
+            color: var(--airforce-blue);
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .feature-card p {
+            color: #666;
+            line-height: 1.6;
+            font-size: 1.05rem;
+        }
+
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 1.5rem;
+            display: block;
+        }
+
+        .footer {
+            background: var(--airforce-blue);
+            color: var(--airforce-white);
+            text-align: center;
+            padding: 2.5rem 1rem;
+            margin-top: 4rem;
+            border-top: 4px solid var(--airforce-gold);
+            position: relative;
+        }
+
+        .footer::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, var(--airforce-gold), transparent);
+        }
+
+        .footer p {
+            margin: 0.5rem 0;
+            font-size: 1rem;
+        }
+
+        .system-status {
+            background: rgba(255,255,255,0.1);
+            padding: 1rem;
+            border-radius: 10px;
+            margin: 1rem auto;
+            max-width: 300px;
+            border: 1px solid var(--airforce-gold);
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: #28a745;
+            color: white;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+
+        .status-indicator::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: white;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+            
+            .features {
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            }
+        }
+
+        @media (max-width: 768px) {
+            .navbar {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+                padding: 1.5rem;
+            }
+            
+            .navbar-nav {
+                justify-content: center;
+                gap: 1rem;
+            }
+            
+            .container {
+                padding: 1rem;
+            }
+            
+            .hero {
+                padding: 2rem 1.5rem;
+                margin: 1rem 0.5rem 2rem 0.5rem;
+            }
+            
+            .hero h1 {
+                font-size: 2rem;
+            }
+            
+            .hero p {
+                font-size: 1.1rem;
+            }
+            
+            .cta-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .btn {
+                width: 100%;
+                max-width: 300px;
+            }
+            
+            .features {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .navbar-brand {
+                font-size: 1.3rem;
+            }
+            
+            .navbar-nav {
+                flex-direction: column;
+                width: 100%;
+            }
+            
+            .navbar-nav a {
+                justify-content: center;
+                text-align: center;
+            }
+            
+            .hero h1 {
+                font-size: 1.8rem;
+            }
+            
+            .feature-card {
+                padding: 2rem 1.5rem;
+            }
+            
+            .footer {
+                padding: 2rem 1rem;
+            }
+        }
+
+        /* Utility Classes */
+        .text-center { text-align: center; }
+        .text-gold { color: var(--airforce-gold); }
+        .text-blue { color: var(--airforce-blue); }
+        .bg-blue { background: var(--airforce-blue); }
+        .bg-gold { background: var(--airforce-gold); }
+        .mt-2 { margin-top: 2rem; }
+        .mb-2 { margin-bottom: 2rem; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-brand">
+            Air Force of Zimbabwe - Identity Verification System
+        </div>
+        <ul class="navbar-nav">
+            <li><a href="/" class="active">🏠 Home</a></li>
+            
+            {% if user.is_authenticated and user.is_staff %}
+                <!-- Show dashboard links for logged-in staff -->
+                <li><a href="/verification/dashboard/" {% if request.path == '/verification/dashboard/' %}class="active"{% endif %}>📊 Command Dashboard</a></li>
+                <li><a href="/verification/user-management/" {% if request.path == '/verification/user-management/' %}class="active"{% endif %}>👥 Personnel Management</a></li>
+                <li><a href="/verification/visitor-management/" {% if request.path == '/verification/visitor-management/' %}class="active"{% endif %}>👤 Visitor Control</a></li>
+                <li><a href="/admin/">⚙️ System Administration</a></li>
+                <li><a href="/verification/admin-logout/">🚪 Logout ({{ user.username }})</a></li>
+            {% else %}
+                <!-- Show login links for non-authenticated users -->
+                <li><a href="/verification/admin-login/">🔐 Command Staff Login</a></li>
+                <li><a href="/verification/login/">📷 Biometric Login</a></li>
+                <li><a href="/admin/">⚙️ Administration</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    
+    <div class="container">
+        {% block content %}
+        <!-- Default home content -->
+        <div class="hero">
+            <h1>🛡️ Air of Force Zimbabwe</h1>
+            <p class="text-blue">Advanced Identity Verification & Access Control System</p>
+            
+            <div class="system-status">
+                <div class="status-indicator">
+                    System Operational
+                </div>
+            </div>
+            
+            <div class="cta-buttons">
+                <a href="/verification/login/" class="btn btn-primary">
+                    📷 Biometric Face Login
+                </a>
+                <a href="/verification/admin-login/" class="btn btn-secondary">
+                    🔐 Command Staff Access
+                </a>
+            </div>
+        </div>
+
+        <div class="features">
+            <div class="feature-card">
+                <div class="feature-icon">🔐</div>
+                <h3>Biometric Authentication</h3>
+                <p>Advanced face recognition technology for secure, contactless access control and personnel verification.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">👥</div>
+                <h3>Personnel Management</h3>
+                <p>Comprehensive personnel database with role-based access control and real-time monitoring capabilities.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <h3>Real-time Analytics</h3>
+                <p>Live access monitoring, activity tracking, and comprehensive security analytics dashboard.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🛡️</div>
+                <h3>Military-grade Security</h3>
+                <p>Enterprise-level security protocols with encrypted data storage and secure communication channels.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <h3>High Performance</h3>
+                <p>Optimized for rapid face recognition with sub-second verification and minimal system latency.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📱</div>
+                <h3>Responsive Design</h3>
+                <p>Fully responsive interface optimized for desktop, tablet, and mobile command operations.</p>
+            </div>
+        </div>
+        {% endblock %}
     </div>
-    <ul class="navbar-nav">
-        <li><a href="/">Home</a></li>
-        
-        {% if user.is_authenticated and user.is_staff %}
-            <!-- Show dashboard links for logged-in staff -->
-            <li><a href="/verification/dashboard/" {% if request.path == '/verification/dashboard/' %}class="active"{% endif %}>Dashboard</a></li>
-            <li><a href="/verification/user-management/" {% if request.path == '/verification/user-management/' %}class="active"{% endif %}>User Management</a></li>
-            <li><a href="/verification/visitor-management/" {% if request.path == '/verification/visitor-management/' %}class="active"{% endif %}>Visitor Management</a></li>
-            <li><a href="/admin/">Admin Panel</a></li>
-            <li><a href="/verification/admin-logout/">Logout ({{ user.username }})</a></li>
-        {% else %}
-            <!-- Show login link for non-authenticated users -->
-            <li><a href="/verification/admin-login/">Staff Login</a></li>
-            <li><a href="/verification/login/">Face Login</a></li>
-            <li><a href="/admin/">Admin</a></li>
-        {% endif %}
-    </ul>
-</nav>
+
+    <footer class="footer">
+        <p>&copy; 2025 Air Force of Zimbabwe. All rights reserved.</p>
+        <p>Secure Identity Verification System v2.0 | Military Grade Security</p>
+        <p class="mt-2">🛡️ Protecting National Security Through Advanced Technology</p>
+    </footer>
+
+    <script>
+        // Real-time system status updates
+        function updateSystemStatus() {
+            const statusElement = document.querySelector('.status-indicator');
+            if (statusElement) {
+                // Simulate real-time status check
+                fetch('/verification/api/info/')
+                    .then(response => response.json())
+                    .then(data => {
+                        statusElement.innerHTML = `
+                            <span style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="width: 8px; height: 8px; background: #28a745; border-radius: 50%; animation: pulse 2s infinite;"></span>
+                                System Operational
+                            </span>
+                        `;
+                    })
+                    .catch(error => {
+                        console.log('Status check failed:', error);
+                    });
+            }
+        }
+
+        // Update status every 30 seconds
+        setInterval(updateSystemStatus, 30000);
+
+        // Add interactive features
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add hover effects to feature cards
+            const featureCards = document.querySelectorAll('.feature-card');
+            featureCards.forEach(card => {
+                card.addEventListener('mouseenter', function() {
+                    this.style.transform = 'translateY(-8px)';
+                });
+                card.addEventListener('mouseleave', function() {
+                    this.style.transform = 'translateY(0)';
+                });
+            });
+
+            // Add click effects to buttons
+            const buttons = document.querySelectorAll('.btn');
+            buttons.forEach(button => {
+                button.addEventListener('mousedown', function() {
+                    this.style.transform = 'translateY(1px)';
+                });
+                button.addEventListener('mouseup', function() {
+                    this.style.transform = 'translateY(-3px)';
+                });
+            });
+        });
+
+        // Add service worker for offline functionality (basic implementation)
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js')
+                .then(registration => {
+                    console.log('SW registered: ', registration);
+                })
+                .catch(registrationError => {
+                    console.log('SW registration failed: ', registrationError);
+                });
+        }
+    </script>
+</body>
+</html>
