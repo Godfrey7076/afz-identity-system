@@ -1,47 +1,73 @@
 from django.contrib import admin
-from django.utils.html import format_html
-from django.urls import reverse
-from .models import FaceVerificationSession, AccessLog
+from .models import (
+    SystemSettings, Person, IDRecord, SecurityLog,
+    FaceVerificationSession, AccessLog
+)
+
+
+@admin.register(SystemSettings)
+class SystemSettingsAdmin(admin.ModelAdmin):
+    """
+    Admin interface for system settings
+    """
+    list_display = ['system_name', 'max_login_attempts',
+                    'session_timeout', 'face_match_threshold']
+    list_editable = ['max_login_attempts',
+                     'session_timeout', 'face_match_threshold']
+
+
+@admin.register(Person)
+class PersonAdmin(admin.ModelAdmin):
+    """
+    Admin interface for military personnel
+    """
+    list_display = ['service_number', 'rank', 'first_name',
+                    'last_name', 'unit', 'security_clearance', 'status']
+    list_filter = ['rank', 'unit', 'security_clearance', 'status']
+    search_fields = ['first_name', 'last_name', 'service_number', 'rank']
+    ordering = ['rank', 'last_name']
+
+
+@admin.register(IDRecord)
+class IDRecordAdmin(admin.ModelAdmin):
+    """
+    Admin interface for ID records
+    """
+    list_display = ['security_number', 'person',
+                    'id_type', 'issue_date', 'expiry_date', 'status']
+    list_filter = ['id_type', 'status', 'issue_date']
+    search_fields = ['security_number',
+                     'person__first_name', 'person__last_name']
+    ordering = ['-issue_date']
+
+
+@admin.register(SecurityLog)
+class SecurityLogAdmin(admin.ModelAdmin):
+    """
+    Admin interface for security logs
+    """
+    list_display = ['timestamp', 'person', 'action', 'ip_address']
+    list_filter = ['action', 'timestamp']
+    search_fields = ['person__first_name', 'person__last_name', 'action']
+    ordering = ['-timestamp']
+    readonly_fields = ['timestamp']  # Can't edit timestamps
+
+
+# YOUR EXISTING ADMIN REGISTRATIONS
+@admin.register(FaceVerificationSession)
+class FaceVerificationSessionAdmin(admin.ModelAdmin):
+    """
+    Admin interface for your existing face verification sessions
+    """
+    list_display = ['user', 'session_id', 'created_at', 'is_active']
+    list_filter = ['is_active', 'created_at']
 
 
 @admin.register(AccessLog)
 class AccessLogAdmin(admin.ModelAdmin):
-    list_display = ['user', 'timestamp', 'verification_method',
-                    'success_badge', 'confidence_score', 'get_security_number']
+    """
+    Admin interface for your existing access logs
+    """
+    list_display = ['user', 'timestamp',
+                    'verification_method', 'success', 'confidence_score']
     list_filter = ['verification_method', 'success', 'timestamp']
-    search_fields = ['user__username', 'user__security_number']
-    readonly_fields = ['timestamp']
-    list_per_page = 25
-
-    def success_badge(self, obj):
-        if obj.success:
-            return format_html('<span style="color: green; font-weight: bold;">✅ SUCCESS</span>')
-        else:
-            return format_html('<span style="color: red; font-weight: bold;">❌ FAILED</span>')
-    success_badge.short_description = 'Status'
-
-    def get_security_number(self, obj):
-        return obj.user.security_number
-    get_security_number.short_description = 'Security Number'
-
-
-@admin.register(FaceVerificationSession)
-class FaceVerificationSessionAdmin(admin.ModelAdmin):
-    list_display = ['user', 'session_id', 'created_at', 'is_active_badge']
-    list_filter = ['is_active', 'created_at']
-    search_fields = ['user__username', 'session_id']
-    readonly_fields = ['created_at']
-    list_per_page = 20
-
-    def is_active_badge(self, obj):
-        if obj.is_active:
-            return format_html('<span style="color: green; font-weight: bold;">● ACTIVE</span>')
-        else:
-            return format_html('<span style="color: gray; font-weight: bold;">● INACTIVE</span>')
-    is_active_badge.short_description = 'Session Status'
-
-
-# Custom admin site header
-admin.site.site_header = "🛡️ Air Force Zimbabwe - Identity System Administration"
-admin.site.site_title = "AFZ Identity System"
-admin.site.index_title = "Command Center Administration"
