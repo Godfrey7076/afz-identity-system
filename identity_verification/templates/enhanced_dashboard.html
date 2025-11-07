@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AFZ Identity System - Enhanced Command Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --afz-primary: #2c3e50;
+            --afz-secondary: #3498db;
+            --afz-success: #27ae60;
+            --afz-warning: #f39c12;
+            --afz-danger: #e74c3c;
+            --afz-info: #17a2b8;
+        }
+        
+        .dashboard-card {
+            transition: all 0.3s ease;
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-left: 4px solid var(--afz-secondary);
+            margin-bottom: 1.5rem;
+        }
+        
+        .dashboard-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15);
+        }
+        
+        .stat-card {
+            color: white;
+            border-left: 4px solid #fff !important;
+        }
+        
+        .bg-gradient-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important; }
+        .bg-gradient-success { background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%) !important; }
+        .bg-gradient-warning { background: linear-gradient(135deg, #f39c12 0%, #f1c40f 100%) !important; }
+        .bg-gradient-danger { background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%) !important; }
+        .bg-gradient-info { background: linear-gradient(135deg, #17a2b8 0%, #3498db 100%) !important; }
+        
+        .activity-timeline {
+            border-left: 3px solid var(--afz-secondary);
+            padding-left: 1.5rem;
+        }
+        
+        .progress {
+            height: 10px;
+            border-radius: 5px;
+        }
+        
+        .quick-action-btn {
+            transition: all 0.3s;
+            border-radius: 10px;
+            padding: 1.5rem 0.5rem;
+            border: none;
+            height: 100%;
+        }
+        
+        .quick-action-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        
+        .system-health-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        .health-healthy { background-color: var(--afz-success); }
+        .health-warning { background-color: var(--afz-warning); }
+        .health-critical { background-color: var(--afz-danger); }
+        
+        .real-time-badge {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); min-height: 100vh;">
+    <div class="container-fluid py-4">
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col">
+                <h1 class="display-5 fw-bold text-dark mb-2">
+                    <i class="fas fa-id-card-alt me-3" style="color: var(--afz-primary);"></i>
+                    AFZ Identity System - Command Dashboard
+                </h1>
+                <p class="text-muted mb-0">Real-time Monitoring & Analytics • Last Updated: {{ last_update }}</p>
+            </div>
+            <div class="col-auto">
+                <div class="d-flex gap-2 align-items-center">
+                    <span class="badge bg-success fs-6 real-time-badge">
+                        <i class="fas fa-circle me-1"></i> LIVE
+                    </span>
+                    <span class="badge bg-info fs-6">{{ system_uptime }} Uptime</span>
+                    <button class="btn btn-outline-primary btn-sm" onclick="refreshDashboard()" id="refreshBtn">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Stats Grid -->
+        <div class="row">
+            <!-- Total Users -->
+            <div class="col-xl-2 col-md-4 col-6 mb-3">
+                <div class="card dashboard-card stat-card bg-gradient-primary">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="card-title text-white-50">Total Users</h6>
+                                <h2 class="display-6 text-white mb-0">{{ total_users }}</h2>
+                                <small class="text-white-50">Active Today: {{ active_today }}</small>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-users fa-2x text-white-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Verified Users -->
+            <div class="col-xl-2 col-md-4 col-6 mb-3">
+                <div class="card dashboard-card stat-card bg-gradient-success">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h6 class="card-title text-white-50">Verified</h6>
+                                <h2 class="display-6 text-white mb-0">{{ verified_users }}</h2>
+                                <small class="text-white-50">{{ overall_success_rate }}% Success Rate</small>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-check-circle fa-2x text-white-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Today's Activity -->
+            <div class="col-xl-2 col-md-4 col-6 mb-3">
+                <div class="card dashboard-card stat-card bg-gradient-info">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h6 class="card-title text-white-50">Today's Logs</h6>
+                                <h2 class="display-6 text-white mb-0">{{ today_logs }}</h2>
+                                <small class="text-white-50">Total: {{ total_logs }}</small>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-chart-bar fa-2x text-white-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Face Recognition Accuracy -->
+            <div class="col-xl-2 col-md-4 col-6 mb-3">
+                <div class="card dashboard-card stat-card bg-gradient-warning">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h6 class="card-title text-dark">Face Accuracy</h6>
+                                <h2 class="display-6 text-dark mb-0">{{ face_success_rate }}%</h2>
+                                <small class="text-dark">Verification Rate</small>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-user-check fa-2x text-dark-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visitors -->
+            <div class="col-xl-2 col-md-4 col-6 mb-3">
+                <div class="card dashboard-card stat-card bg-gradient-secondary">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h6 class="card-title text-white-50">Visitors</h6>
+                                <h2 class="display-6 text-white mb-0">{{ total_visitors }}</h2>
+                                <small class="text-white-50">Active: {{ active_visitors }}</small>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-user-clock fa-2x text-white-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Health -->
+            <div class="col-xl-2 col-md-4 col-6 mb-3">
+                <div class="card dashboard-card">
+                    <div class="card-body">
+                        <h6 class="card-title text-muted">System Health</h6>
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="system-health-indicator health-{{ system_health.system_status }}"></span>
+                            <span class="fw-bold text-capitalize">{{ system_health.system_status }}</span>
+                        </div>
+                        <small class="text-muted">CPU: {{ system_health.cpu_usage }}%</small><br>
+                        <small class="text-muted">Memory: {{ system_health.memory_usage }}%</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="row">
+            <!-- Left Column -->
+            <div class="col-lg-8">
+                <!-- Quick Actions -->
+                <div class="card dashboard-card mb-4">
+                    <div class="card-header" style="background: var(--afz-primary); color: white;">
+                        <h5 class="mb-0"><i class="fas fa-bolt me-2"></i>Quick Actions</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            {% for action in quick_actions %}
+                            <div class="col-xl-4 col-md-6 mb-3">
+                                <a href="{{ action.url }}" class="btn btn-{{ action.color }} w-100 quick-action-btn text-white">
+                                    <div class="fs-2 mb-2">{{ action.icon }}</div>
+                                    <div class="fw-bold">{{ action.name }}</div>
+                                </a>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Row -->
+                <div class="row">
+                    <div class="col-md-6 mb-4">
+                        <div class="card dashboard-card">
+                            <div class="card-header">
+                                <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Daily Activity Trend</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="activityChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <div class="card dashboard-card">
+                            <div class="card-header">
+                                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Verification Methods</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="methodChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Performance -->
+                <div class="card dashboard-card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-tachometer-alt me-2"></i>System Performance</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label>CPU Usage: {{ system_health.cpu_usage }}%</label>
+                                <div class="progress">
+                                    <div class="progress-bar bg-{% if system_health.cpu_usage < 70 %}success{% else %}warning{% endif %}" 
+                                         style="width: {{ system_health.cpu_usage }}%"></div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label>Memory Usage: {{ system_health.memory_usage }}%</label>
+                                <div class="progress">
+                                    <div class="progress-bar bg-{% if system_health.memory_usage < 70 %}info{% else %}warning{% endif %}" 
+                                         style="width: {{ system_health.memory_usage }}%"></div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label>Disk Usage: {{ system_health.disk_usage }}%</label>
+                                <div class="progress">
+                                    <div class="progress-bar bg-{% if system_health.disk_usage < 70 %}primary{% else %}danger{% endif %}" 
+                                         style="width: {{ system_health.disk_usage }}%"></div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label>Response Time: {{ response_time }}</label>
+                                <div class="progress">
+                                    <div class="progress-bar bg-success" style="width: 85%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column -->
+            <div class="col-lg-4">
+                <!-- Recent Activity -->
+                <div class="card dashboard-card mb-4">
+                    <div class="card-header" style="background: var(--afz-info); color: white;">
+                        <h5 class="mb-0"><i class="fas fa-history me-2"></i>Recent Activity</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="activity-timeline">
+                            {% for activity in recent_activity %}
+                            <div class="mb-3 position-relative">
+                                <div class="d-flex">
+                                    <span class="badge bg-{% if activity.success %}success{% else %}danger{% endif %} me-2">
+                                        {% if activity.success %}✅{% else %}❌{% endif %}
+                                    </span>
+                                    <div class="flex-grow-1">
+                                        <strong class="d-block">{{ activity.user.username|default:"System" }}</strong>
+                                        <small class="text-muted">{{ activity.verification_method|title }} • {{ activity.timestamp|timesince }} ago</small>
+                                        {% if activity.confidence_score %}
+                                        <br>
+                                        <small class="text-muted">Confidence: {{ activity.confidence_score|floatformat:1 }}%</small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% if not forloop.last %}
+                                <div class="timeline-connector"></div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Alerts -->
+                <div class="card dashboard-card">
+                    <div class="card-header" style="background: var(--afz-warning); color: white;">
+                        <h5 class="mb-0"><i class="fas fa-bell me-2"></i>System Alerts</h5>
+                    </div>
+                    <div class="card-body">
+                        {% for alert in alerts %}
+                        <div class="alert alert-{{ alert.type }} alert-dismissible fade show mb-2" role="alert">
+                            <div class="d-flex">
+                                <i class="fas fa-{% if alert.type == 'warning' %}exclamation-triangle{% elif alert.type == 'info' %}info-circle{% else %}check-circle{% endif %} me-2 mt-1"></i>
+                                <div>
+                                    <small class="fw-bold">{{ alert.message }}</small>
+                                    <br>
+                                    <small class="text-muted">{{ alert.timestamp }}</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        
+                        <!-- System Status -->
+                        <div class="mt-3 p-3 bg-light rounded">
+                            <h6 class="text-muted mb-2">System Status</h6>
+                            <div class="d-flex justify-content-between">
+                                <span>Face Recognition:</span>
+                                <span class="badge bg-success">Active</span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>Database:</span>
+                                <span class="badge bg-success">Connected</span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>API Services:</span>
+                                <span class="badge bg-success">Running</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Initialize Charts
+        document.addEventListener('DOMContentLoaded', function() {
+            const trendData = {{ trend_data|safe }};
+            
+            // Activity Trend Chart
+            const activityCtx = document.getElementById('activityChart').getContext('2d');
+            new Chart(activityCtx, {
+                type: 'line',
+                data: {
+                    labels: trendData.dates,
+                    datasets: [{
+                        label: 'Total Logins',
+                        data: trendData.daily_logins,
+                        borderColor: '#3498db',
+                        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                        tension: 0.4
+                    }, {
+                        label: 'Successful',
+                        data: trendData.daily_success,
+                        borderColor: '#27ae60',
+                        backgroundColor: 'rgba(39, 174, 96, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        }
+                    }
+                }
+            });
+            
+            // Method Distribution Chart
+            const methodCtx = document.getElementById('methodChart').getContext('2d');
+            new Chart(methodCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: trendData.verification_methods.map(m => m.verification_method),
+                    datasets: [{
+                        data: trendData.verification_methods.map(m => m.count),
+                        backgroundColor: [
+                            '#3498db', '#27ae60', '#f39c12', '#e74c3c', '#9b59b6'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                        }
+                    }
+                }
+            });
+        });
+        
+        // Auto-refresh dashboard every 30 seconds
+        function refreshDashboard() {
+            const btn = document.getElementById('refreshBtn');
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+            btn.disabled = true;
+            
+            fetch('/verification/api/dashboard/')
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Dashboard refreshed:', data);
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                })
+                .catch(error => {
+                    console.error('Refresh failed:', error);
+                    btn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
+                    btn.disabled = false;
+                });
+        }
+        
+        setInterval(refreshDashboard, 30000);
+        
+        // Add interactive features
+        document.addEventListener('DOMContentLoaded', function() {
+            const cards = document.querySelectorAll('.dashboard-card');
+            cards.forEach(card => {
+                card.style.cursor = 'pointer';
+                card.addEventListener('click', function() {
+                    this.style.transform = 'scale(0.98)';
+                    setTimeout(() => {
+                        this.style.transform = '';
+                    }, 150);
+                });
+            });
+        });
+    </script>
+</body>
+</html>

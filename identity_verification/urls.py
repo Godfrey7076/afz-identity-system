@@ -1,54 +1,51 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
-from .views import (
-    FaceVerificationViewSet,
-    AccessLogViewSet,
-    admin_face_registration,
-    face_login_view,
-    face_verification_status,
-    api_info,
-    DashboardView,
-    user_management_view,
-    visitor_management_view,
-    admin_login_view,
-    admin_logout_view,
-    RealTimeDataView
-)
 
-# Initialize router
 router = DefaultRouter()
-router.register(r'verification', FaceVerificationViewSet,
+router.register(r'verification', views.FaceVerificationViewSet,
                 basename='verification')
-router.register(r'access-logs', AccessLogViewSet)
+router.register(r'access-logs', views.AccessLogViewSet)
 
-# URL patterns
 urlpatterns = [
-    # Authentication routes
-    path('admin-login/', admin_login_view, name='admin_login'),
-    path('admin-logout/', admin_logout_view, name='admin_logout'),
-
-    # API routes
+    # API Routes
     path('api/', include(router.urls)),
 
-    # Admin face registration
+    # Enhanced Dashboard Routes
+    path('enhanced-dashboard/', views.EnhancedDashboardView.as_view(),
+         name='enhanced_dashboard'),
+    path('api/dashboard/', views.DashboardAPIView.as_view(), name='dashboard_api'),
+
+    # Authentication Routes
+    path('admin-login/', views.admin_login_view, name='admin_login'),
+    path('logout/', views.admin_logout_view, name='admin_logout'),
+
+    # User Management Routes
+    path('user-management/', views.user_management_view, name='user_management'),
+    path('user-detail/<int:user_id>/',
+         views.user_detail_view, name='user_detail'),
+    path('toggle-user-status/<int:user_id>/',
+         views.toggle_user_status, name='toggle_user_status'),
+    path('register-user-face/<int:user_id>/',
+         views.register_user_face, name='register_user_face'),
+
+    # Visitor Management Routes
+    path('visitor-management/', views.visitor_management_view,
+         name='visitor_management'),
+
+    # Security & System Routes
+    path('security-audit/', views.security_audit_view, name='security_audit'),
+    path('system-status/', views.system_status_view, name='system_status'),
+
+    # Face Verification Routes
+    path('login/', views.face_login_view, name='face_login'),
+    path('face-status/', views.face_verification_status, name='face_status'),
     path('admin/register-face/<int:user_id>/',
-         admin_face_registration, name='admin_face_registration'),
+         views.admin_face_registration, name='admin_face_registration'),
 
-    # Face login interface (for users)
-    path('login/', face_login_view, name='face_login'),
+    # Legacy Dashboard (keep for compatibility)
+    path('dashboard/', views.EnhancedDashboardView.as_view(), name='dashboard'),
 
-    # Status check endpoint
-    path('status/', face_verification_status, name='face_verification_status'),
-
-    # Dashboard URLs (protected)
-    path('dashboard/', DashboardView.as_view(), name='dashboard'),
-    path('user-management/', user_management_view, name='user_management'),
-    path('visitor-management/', visitor_management_view, name='visitor_management'),
-
-    # Real-time data API
-    path('api/realtime-data/', RealTimeDataView.as_view(), name='realtime_data'),
-
-    # API info endpoint
-    path('api/info/', api_info, name='api_info'),
+    # System Info
+    path('api-info/', views.api_info, name='api_info'),
 ]
