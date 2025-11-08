@@ -1,14 +1,14 @@
+# identity_verification/views.py
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib import messages
 from django.http import JsonResponse, HttpResponse
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.utils.decorators import method_decorator
 from django.views.generic import TemplateView, View
-from django.db.models import Count, Q, Avg, F
+from django.db.models import Count, Q, Avg, Max
 from django.contrib.auth import authenticate, login, logout
 from datetime import datetime, timedelta
 import json
@@ -27,10 +27,11 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 import face_recognition
 from PIL import Image
 import io
-from django.db import transaction
+from cryptography.fernet import Fernet
 
-from .models import UserProfile, AccessLog, SystemSettings
+from .models import UserProfile, AccessLog, SystemSettings, SecurityAlert
 from django.contrib.auth import get_user_model
+from .decorators import rate_limit
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -42,8 +43,8 @@ class AFZSecurityConfig:
     MIN_FACE_CONFIDENCE = 85.0
     MAX_LOGIN_ATTEMPTS = 5
     SESSION_TIMEOUT = 3600
-    FACE_ENCODING_VERSION = '1.0'
-    MAX_FACE_ENCODINGS = 3  # Store multiple encodings per user
+    FACE_ENCODING_VERSION = '2.0'
+    MAX_FACE_ENCODINGS = 3
 
     @classmethod
     def get_system_status(cls):
@@ -60,7 +61,7 @@ class AFZSecurityConfig:
 class AFZResponse:
     @staticmethod
     def success(data=None, message="", code="SUCCESS"):
-        response_data = {
+        return {
             'success': True,
             'data': data,
             'message': message,
@@ -68,7 +69,6 @@ class AFZResponse:
             'timestamp': timezone.now().isoformat(),
             'system': 'AFZ Identity Verification System'
         }
-        return response_data
 
     @staticmethod
     def error(message="", code="ERROR", status_code=400):
@@ -90,22 +90,46 @@ def get_client_ip(request):
         ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
     return ip
 
+
+def get_user_agent(request):
+    """Extract user agent information"""
+    return request.META.get('HTTP_USER_AGENT', 'Unknown')[:500]
+
 # Utility Functions
 
 
 def is_admin(user):
     return user.is_staff or user.is_superuser
 
-
-def get_user_agent(request):
-    """Extract user agent information"""
-    return request.META.get('HTTP_USER_AGENT', 'Unknown')[:500]
-
-# Face Recognition Utilities
+# Face Recognition Engine
 
 
 class FaceRecognitionEngine:
-    """Enhanced face recognition engine with multiple encodings support"""
+    """Enhanced face recognition engine with encryption support"""
+
+    def __init__(self):
+        self.encryption_key = Fernet.generate_key()
+        self.cipher_suite = Fernet(self.encryption_key)
+
+    def encrypt_encoding(self, encoding_data):
+        """Encrypt face encoding before storage"""
+        try:
+            encoded_data = json.dumps(encoding_data).encode()
+            encrypted_data = self.cipher_suite.encrypt(encoded_data)
+            return base64.urlsafe_b64encode(encrypted_data).decode()
+        except Exception as e:
+            logger.error(f"Encoding encryption error: {str(e)}")
+            return None
+
+    def decrypt_encoding(self, encrypted_data):
+        """Decrypt face encoding for verification"""
+        try:
+            encrypted_bytes = base64.urlsafe_b64decode(encrypted_data)
+            decrypted_data = self.cipher_suite.decrypt(encrypted_bytes)
+            return json.loads(decrypted_data.decode())
+        except Exception as e:
+            logger.error(f"Encoding decryption error: {str(e)}")
+            return None
 
     @staticmethod
     def process_image(image_data):
@@ -141,15 +165,14 @@ class FaceRecognitionEngine:
             logger.error(f"Face encoding extraction error: {str(e)}")
             return [], [], False
 
-    @staticmethod
-    def enroll_face(user, image_data, encoding_index=0):
-        """Enroll face for user with multiple encoding support"""
+    def enroll_face(self, user, image_data, encoding_index=0):
+        """Enroll face for user with encryption"""
         try:
-            image_np, success = FaceRecognitionEngine.process_image(image_data)
+            image_np, success = self.process_image(image_data)
             if not success:
                 return False, "Failed to process image"
 
-            face_encodings, face_locations, extraction_success = FaceRecognitionEngine.extract_face_encodings(
+            face_encodings, face_locations, extraction_success = self.extract_face_encodings(
                 image_np)
 
             if not extraction_success:
@@ -160,76 +183,96 @@ class FaceRecognitionEngine:
             elif len(face_encodings) > 1:
                 return False, "Multiple faces detected. Please provide image with only one face."
 
-            # Store the face encoding
+            # Encrypt and store the face encoding
             profile, created = UserProfile.objects.get_or_create(user=user)
+            encrypted_encoding = self.encrypt_encoding(
+                face_encodings[0].tolist())
 
-            # Store multiple encodings if needed
-            encoding_field = f'face_encoding_{encoding_index}'
-            if hasattr(profile, encoding_field):
-                setattr(profile, encoding_field, json.dumps(
-                    face_encodings[0].tolist()))
+            if encrypted_encoding is None:
+                return False, "Failed to encrypt face data"
+
+            # Store in appropriate field based on index
+            if encoding_index == 0:
+                profile.face_encoding = encrypted_encoding
+            elif encoding_index == 1:
+                profile.face_encoding_1 = encrypted_encoding
+            elif encoding_index == 2:
+                profile.face_encoding_2 = encrypted_encoding
             else:
-                profile.face_encoding = json.dumps(face_encodings[0].tolist())
+                return False, "Invalid encoding index"
 
             profile.face_enrolled = True
             profile.face_enrollment_date = timezone.now()
             profile.face_encoding_version = AFZSecurityConfig.FACE_ENCODING_VERSION
             profile.face_encoding_count = max(
                 profile.face_encoding_count or 0, encoding_index + 1)
+            profile.last_face_update = timezone.now()
             profile.save()
 
+            # Log successful enrollment
+            logger.info(
+                f"AFZ Security: Face enrolled for user {user.username}, encoding #{encoding_index + 1}")
             return True, "Face enrolled successfully"
 
         except Exception as e:
             logger.error(f"Face enrollment error: {str(e)}")
             return False, f"Enrollment failed: {str(e)}"
 
-    @staticmethod
-    def verify_face(user, image_data):
-        """Verify face against stored encodings"""
+    def verify_face(self, user, image_data):
+        """Verify face against stored encrypted encodings"""
         try:
             profile = UserProfile.objects.get(user=user)
             if not profile.face_enrolled:
                 return False, 0.0, "Face not enrolled"
 
-            image_np, success = FaceRecognitionEngine.process_image(image_data)
+            image_np, success = self.process_image(image_data)
             if not success:
                 return False, 0.0, "Image processing failed"
 
-            face_encodings, face_locations, extraction_success = FaceRecognitionEngine.extract_face_encodings(
+            face_encodings, face_locations, extraction_success = self.extract_face_encodings(
                 image_np)
             if not extraction_success or len(face_encodings) == 0:
                 return False, 0.0, "No face detected"
 
             # Get all stored encodings for the user
             stored_encodings = []
-            if profile.face_encoding:
-                stored_encodings.append(
-                    np.array(json.loads(profile.face_encoding)))
+            encoding_fields = [
+                profile.face_encoding,
+                profile.face_encoding_1,
+                profile.face_encoding_2
+            ]
 
-            # Check additional encodings if they exist
-            for i in range(1, profile.face_encoding_count or 1):
-                encoding_field = f'face_encoding_{i}'
-                if hasattr(profile, encoding_field):
-                    encoding_value = getattr(profile, encoding_field)
-                    if encoding_value:
-                        stored_encodings.append(
-                            np.array(json.loads(encoding_value)))
+            for i, encrypted_encoding in enumerate(encoding_fields):
+                if encrypted_encoding and i < (profile.face_encoding_count or 1):
+                    try:
+                        decrypted_data = self.decrypt_encoding(
+                            encrypted_encoding)
+                        if decrypted_data:
+                            stored_encodings.append(np.array(decrypted_data))
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to decrypt encoding {i} for user {user.username}: {str(e)}")
 
             if not stored_encodings:
-                return False, 0.0, "No stored face encodings found"
+                return False, 0.0, "No valid face encodings found"
 
             # Compare with all stored encodings
             best_confidence = 0.0
             for stored_encoding in stored_encodings:
-                matches = face_recognition.compare_faces(
-                    [stored_encoding], face_encodings[0])
-                face_distance = face_recognition.face_distance(
-                    [stored_encoding], face_encodings[0])[0]
-                confidence = (1 - face_distance) * 100
+                try:
+                    matches = face_recognition.compare_faces(
+                        [stored_encoding], face_encodings[0])
+                    face_distance = face_recognition.face_distance(
+                        [stored_encoding], face_encodings[0])
 
-                if matches[0] and confidence > best_confidence:
-                    best_confidence = confidence
+                    if len(face_distance) > 0:
+                        confidence = (1 - face_distance[0]) * 100
+
+                        if matches[0] and confidence > best_confidence:
+                            best_confidence = confidence
+                except Exception as e:
+                    logger.warning(f"Face comparison error: {str(e)}")
+                    continue
 
             if best_confidence >= AFZSecurityConfig.MIN_FACE_CONFIDENCE:
                 return True, best_confidence, "Verification successful"
@@ -242,6 +285,10 @@ class FaceRecognitionEngine:
             logger.error(f"Face verification error: {str(e)}")
             return False, 0.0, f"Verification error: {str(e)}"
 
+
+# Initialize face recognition engine
+face_engine = FaceRecognitionEngine()
+
 # Home and Basic Views
 
 
@@ -249,7 +296,7 @@ def home_view(request):
     """Homepage view for the AFZ Identity System"""
     context = {
         'system_name': 'Air Force of Zimbabwe Identity System',
-        'version': '2.0',
+        'version': '2.1.0',
         'security_level': 'TOP SECRET',
         'current_time': timezone.now()
     }
@@ -258,6 +305,7 @@ def home_view(request):
 # Authentication Views
 
 
+@rate_limit(requests=5, window=300)  # 5 attempts per 5 minutes
 def admin_login_view(request):
     """Admin login view with AFZ security enhancements"""
     if request.user.is_authenticated:
@@ -319,6 +367,7 @@ def admin_logout_view(request):
     return redirect('admin_login')
 
 
+@rate_limit(requests=5, window=300)
 def custom_login(request):
     """Custom login view for regular users"""
     if request.method == 'POST':
@@ -368,6 +417,7 @@ def face_login_view(request):
     return render(request, 'identity_verification/face_login.html', context)
 
 
+@login_required
 def enroll_face_view(request):
     """Face enrollment view for users with actual face recognition"""
     if not request.user.is_authenticated:
@@ -391,7 +441,7 @@ def enroll_face_view(request):
                 return JsonResponse({'success': False, 'error': 'No image data'})
 
             # Process face enrollment
-            success, message = FaceRecognitionEngine.enroll_face(
+            success, message = face_engine.enroll_face(
                 request.user, image_data, encoding_index)
 
             if success:
@@ -1103,7 +1153,7 @@ def register_user_face(request, user_id):
         encoding_index = int(request.POST.get('encoding_index', 0))
 
         if image_data:
-            success, message = FaceRecognitionEngine.enroll_face(
+            success, message = face_engine.enroll_face(
                 user, image_data, encoding_index)
 
             if success:
@@ -1140,7 +1190,11 @@ def register_user_face(request, user_id):
 class FaceVerificationViewSet(viewsets.ViewSet):
     """ViewSet for handling face verification operations with AFZ enhancements"""
 
+    # Add queryset attribute to fix router issue
+    queryset = User.objects.none()
+
     @action(detail=False, methods=['post'])
+    @rate_limit(requests=10, window=60)
     def verify_face(self, request):
         """Verify face against stored encoding with enhanced AFZ security logging"""
         try:
@@ -1167,7 +1221,7 @@ class FaceVerificationViewSet(viewsets.ViewSet):
                 )
 
             # Perform actual face verification
-            is_match, confidence, message = FaceRecognitionEngine.verify_face(
+            is_match, confidence, message = face_engine.verify_face(
                 user, image_data)
 
             if is_match and confidence >= AFZSecurityConfig.MIN_FACE_CONFIDENCE:
@@ -1225,6 +1279,7 @@ class FaceVerificationViewSet(viewsets.ViewSet):
             )
 
     @action(detail=False, methods=['post'])
+    @rate_limit(requests=5, window=300)
     def register_face(self, request):
         """Register a new face for a user with AFZ security validation"""
         user_id = request.data.get('user_id')
@@ -1242,7 +1297,7 @@ class FaceVerificationViewSet(viewsets.ViewSet):
             user = User.objects.get(id=user_id)
 
             # Process face enrollment
-            success, message = FaceRecognitionEngine.enroll_face(
+            success, message = face_engine.enroll_face(
                 user, image_data, encoding_index)
 
             if success:
@@ -1352,12 +1407,14 @@ class FaceVerificationViewSet(viewsets.ViewSet):
             ))
 
 
-class AccessLogViewSet(viewsets.ViewSet):
+class AccessLogViewSet(viewsets.ModelViewSet):
     """ViewSet for accessing access logs with AFZ security features"""
+
+    queryset = AccessLog.objects.all().order_by('-timestamp')
 
     def list(self, request):
         """Get access logs with filtering"""
-        logs = AccessLog.objects.all().select_related('user').order_by('-timestamp')
+        logs = self.get_queryset()
 
         # Apply filters
         date_range = request.GET.get('date_range', '')

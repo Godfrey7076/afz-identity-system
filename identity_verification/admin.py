@@ -1,150 +1,95 @@
+# identity_verification/admin.py
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import CustomUser, UserProfile, AccessLog, SystemSettings
+from django.contrib.auth.models import User
+from .models import UserProfile, AccessLog, SystemSettings, SecurityAlert, FaceEncodingArchive, SystemHealth
 
 
-@admin.register(CustomUser)
+class UserProfileInline(admin.StackedInline):
+    model = UserProfile
+    can_delete = False
+    verbose_name_plural = 'User Profile'
+    fields = (
+        'face_enrolled', 'face_enrollment_date', 'security_clearance',
+        'department', 'rank', 'service_number', 'verification_count'
+    )
+    readonly_fields = ('face_enrollment_date', 'verification_count')
+
+
 class CustomUserAdmin(UserAdmin):
-    list_display = ['username', 'email', 'security_number',
-                    'unit', 'user_type', 'is_verified', 'is_active', 'is_staff']
-    list_filter = ['user_type', 'is_verified',
-                   'is_active', 'is_staff', 'date_joined']
-    search_fields = ['username', 'email', 'security_number',
-                     'unit', 'first_name', 'last_name']
-    ordering = ['-date_joined']
+    inlines = (UserProfileInline,)
+    list_display = ('username', 'email', 'first_name', 'last_name',
+                    'is_staff', 'face_enrolled_status', 'last_login', 'date_joined')
+    list_filter = ('is_staff', 'is_superuser', 'is_active',
+                   'userprofile__face_enrolled', 'userprofile__security_clearance')
 
-    fieldsets = UserAdmin.fieldsets + (
-        ('AFZ Information', {
-            'fields': (
-                'security_number',
-                'unit',
-                'user_type',
-                'is_verified',
-                'verification_date',
-                'face_encoding'
-            )
-        }),
-    )
-
-    readonly_fields = ['verification_date']
-
-    def get_readonly_fields(self, request, obj=None):
-        if obj:  # editing an existing object
-            return self.readonly_fields + ['security_number']
-        return self.readonly_fields
-
-
-@admin.register(UserProfile)
-class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ['user', 'face_enrolled',
-                    'face_enrollment_date', 'department', 'phone', 'created_at']
-    list_filter = ['face_enrolled', 'department', 'created_at']
-    search_fields = ['user__username', 'user__email', 'department', 'phone']
-    readonly_fields = ['created_at', 'updated_at']
-
-    fieldsets = (
-        (None, {
-            'fields': ('user', 'face_enrolled', 'face_enrollment_date')
-        }),
-        ('Contact Information', {
-            'fields': ('department', 'phone'),
-            'classes': ('collapse',)
-        }),
-        ('Timestamps', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
-    )
+    def face_enrolled_status(self, obj):
+        try:
+            return obj.userprofile.face_enrolled
+        except UserProfile.DoesNotExist:
+            return False
+    face_enrolled_status.boolean = True
+    face_enrolled_status.short_description = 'Face Enrolled'
 
 
 @admin.register(AccessLog)
 class AccessLogAdmin(admin.ModelAdmin):
-    list_display = ['user', 'login_method', 'status',
-                    'ip_address', 'timestamp', 'confidence_score']
-    list_filter = ['login_method', 'status', 'timestamp', 'device_type']
-    search_fields = ['user__username', 'ip_address', 'details', 'location']
-    readonly_fields = ['timestamp']
+    list_display = ('user', 'login_method', 'status', 'ip_address',
+                    'timestamp', 'confidence_score', 'is_suspicious')
+    list_filter = ('login_method', 'status', 'timestamp', 'is_suspicious')
+    search_fields = ('user__username', 'ip_address', 'details')
+    readonly_fields = ('timestamp',)
     date_hierarchy = 'timestamp'
 
     fieldsets = (
-        (None, {
-            'fields': ('user', 'login_method', 'status')
+        ('Authentication Details', {
+            'fields': ('user', 'login_method', 'status', 'confidence_score')
         }),
         ('Technical Details', {
-            'fields': ('ip_address', 'user_agent', 'device_type', 'location', 'confidence_score'),
-            'classes': ('collapse',)
+            'fields': ('ip_address', 'user_agent', 'geolocation')
         }),
-        ('Additional Information', {
-            'fields': ('details', 'timestamp'),
-            'classes': ('collapse',)
+        ('Security Information', {
+            'fields': ('is_suspicious', 'flagged_reason', 'details')
+        }),
+        ('Timestamps', {
+            'fields': ('timestamp', 'session_duration')
         }),
     )
-
-    def has_add_permission(self, request):
-        # Prevent manual addition of access logs (they should be created by the system)
-        return False
 
 
 @admin.register(SystemSettings)
 class SystemSettingsAdmin(admin.ModelAdmin):
-    list_display = ['setting_key', 'setting_value', 'updated_at']
-    list_filter = ['updated_at']
-    search_fields = ['setting_key', 'description', 'setting_value']
-    readonly_fields = ['updated_at']
-
-    fieldsets = (
-        (None, {
-            'fields': ('setting_key', 'setting_value')
-        }),
-        ('Description', {
-            'fields': ('description',),
-            'classes': ('collapse',)
-        }),
-        ('Metadata', {
-            'fields': ('updated_at',),
-            'classes': ('collapse',)
-        }),
-    )
-
-    def has_delete_permission(self, request, obj=None):
-        # Prevent deletion of critical system settings
-        if obj and obj.setting_key in ['SYSTEM_NAME', 'SECURITY_LEVEL', 'SYSTEM_VERSION']:
-            return False
-        return super().has_delete_permission(request, obj)
+    list_display = ('key', 'value', 'data_type', 'is_public', 'updated_at')
+    list_filter = ('data_type', 'is_public')
+    search_fields = ('key', 'description')
+    readonly_fields = ('created_at', 'updated_at')
 
 
-# Custom admin site header and title
-admin.site.site_header = "🛡️ AFZ Identity System Administration"
-admin.site.site_title = "AFZ Identity System"
-admin.site.index_title = "Welcome to AFZ Identity System Administration"
-
-# Optional: Custom admin actions
-
-
-def activate_users(modeladmin, request, queryset):
-    queryset.update(is_active=True)
+@admin.register(SecurityAlert)
+class SecurityAlertAdmin(admin.ModelAdmin):
+    list_display = ('title', 'alert_type', 'alert_level',
+                    'related_user', 'is_resolved', 'created_at')
+    list_filter = ('alert_type', 'alert_level', 'is_resolved', 'created_at')
+    search_fields = ('title', 'description', 'related_user__username')
+    readonly_fields = ('created_at',)
 
 
-activate_users.short_description = "Activate selected users"
+@admin.register(FaceEncodingArchive)
+class FaceEncodingArchiveAdmin(admin.ModelAdmin):
+    list_display = ('user', 'encoding_version', 'quality_score', 'archived_at')
+    list_filter = ('encoding_version', 'archived_at')
+    search_fields = ('user__username',)
+    readonly_fields = ('created_at', 'archived_at')
 
 
-def deactivate_users(modeladmin, request, queryset):
-    queryset.update(is_active=False)
+@admin.register(SystemHealth)
+class SystemHealthAdmin(admin.ModelAdmin):
+    list_display = ('timestamp', 'cpu_usage', 'memory_usage',
+                    'disk_usage', 'active_users')
+    list_filter = ('timestamp',)
+    readonly_fields = ('timestamp',)
 
 
-deactivate_users.short_description = "Deactivate selected users"
-
-
-def mark_face_enrolled(modeladmin, request, queryset):
-    for profile in queryset:
-        profile.face_enrolled = True
-        profile.save()
-
-
-mark_face_enrolled.short_description = "Mark as face enrolled"
-
-# Add custom actions to UserProfile admin
-UserProfileAdmin.actions = [mark_face_enrolled]
-
-# Add custom actions to CustomUser admin
-CustomUserAdmin.actions = [activate_users, deactivate_users]
+# Re-register UserAdmin
+admin.site.unregister(User)
+admin.site.register(User, CustomUserAdmin)
