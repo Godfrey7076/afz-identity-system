@@ -1,0 +1,35 @@
+from django.contrib.auth.models import AbstractUser
+from django.db import models
+
+class CustomUser(AbstractUser):
+    USER_TYPES = [
+        ('command', 'Command Staff'),
+        ('security', 'Security Personnel'),
+        ('admin', 'Administrative Staff'),
+        ('standard', 'Standard User'),
+    ]
+    
+    security_number = models.CharField(max_length=20, unique=True, blank=True, null=True)
+    unit = models.CharField(max_length=100, blank=True, null=True)
+    user_type = models.CharField(max_length=20, choices=USER_TYPES, default='standard')
+    is_verified = models.BooleanField(default=False)
+    verification_date = models.DateTimeField(null=True, blank=True)
+    face_encoding = models.TextField(blank=True, null=True)  # Store face encoding as text
+    
+    class Meta:
+        db_table = 'auth_user'
+    
+    def __str__(self):
+        return f"{self.username} ({self.security_number})"
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE)
+    face_enrolled = models.BooleanField(default=False)
+    face_enrollment_date = models.DateTimeField(null=True, blank=True)
+    department = models.CharField(max_length=100, blank=True)
+    phone = models.CharField(max_length=20, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.user.username} Profile"

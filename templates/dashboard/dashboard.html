@@ -1,111 +1,533 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block content %}
-<div class="card">
-    <h2 style="color: #003366; margin-bottom: 2rem;">Dashboard - Air Force of Zimbabwe</h2>
-    
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
-        <div class="card" style="text-align: center; background: linear-gradient(135deg, #003366, #004080); color: white;">
-            <h3>Today's Logins</h3>
-            <p style="font-size: 2rem; font-weight: bold; color: #FFD700;" id="todayLogins">0</p>
-        </div>
-        
-        <div class="card" style="text-align: center; background: linear-gradient(135deg, #28a745, #20c997); color: white;">
-            <h3>Active Visitors</h3>
-            <p style="font-size: 2rem; font-weight: bold; color: white;" id="activeVisitors">0</p>
-        </div>
-        
-        <div class="card" style="text-align: center; background: linear-gradient(135deg, #ffc107, #fd7e14); color: white;">
-            <h3>Pending Approvals</h3>
-            <p style="font-size: 2rem; font-weight: bold; color: white;" id="pendingApprovals">0</p>
-        </div>
-        
-        <div class="card" style="text-align: center; background: linear-gradient(135deg, #dc3545, #c82333); color: white;">
-            <h3>Security Alerts</h3>
-            <p style="font-size: 2rem; font-weight: bold; color: white;" id="securityAlerts">0</p>
-        </div>
-    </div>
-    
-    <div class="card">
-        <h3 style="color: #003366; margin-bottom: 1rem;">Recent Access Logs</h3>
-        <div id="recentLogs" style="min-height: 200px;">
-            <p>Loading recent access logs...</p>
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0" style="color: #003366;">
+            <i class="fas fa-shield-alt me-2"></i>AFZ Identity System Dashboard
+        </h1>
+        <div class="text-end">
+            <small class="text-muted">Last updated: <span id="lastUpdateTime">{{ last_update }}</span></small>
+            <div class="mt-1">
+                <span class="badge bg-success">
+                    <i class="fas fa-circle me-1"></i>System Status: {{ system_status|default:"operational" }}
+                </span>
+            </div>
         </div>
     </div>
 
-    <div class="card">
-        <h3 style="color: #003366; margin-bottom: 1rem;">Quick Actions</h3>
-        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-            <button class="btn" onclick="window.location.href='/login/'">Face Verification</button>
-            <button class="btn" onclick="window.location.href='/visitor-management/'">Manage Visitors</button>
-            <button class="btn" onclick="generateReport()">Generate Report</button>
-            <button class="btn" onclick="viewSecurityLogs()">Security Logs</button>
+    <!-- System Alerts -->
+    {% if alerts %}
+    <div class="row mb-4">
+        <div class="col-12">
+            {% for alert in alerts %}
+            <div class="alert alert-{{ alert.type }} alert-dismissible fade show" role="alert">
+                <i class="fas fa-{{ alert.icon|default:'bell' }} me-2"></i>
+                {{ alert.message }}
+                <small class="text-muted ms-2">- {{ alert.timestamp }}</small>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total Users
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.total_users }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-users fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Active Today
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.active_today }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-user-check fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Face Logins
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.face_logins }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-camera fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Failed Attempts
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.failed_attempts }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts and Additional Stats Row -->
+    <div class="row mb-4">
+        <!-- Success Rate Chart -->
+        <div class="col-xl-4 col-md-6 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Success Rate</h6>
+                </div>
+                <div class="card-body text-center">
+                    <div class="chart-pie pt-4 pb-2">
+                        <canvas id="successRateChart" width="200" height="200"></canvas>
+                    </div>
+                    <div class="mt-4 text-center small">
+                        <span class="mr-2">
+                            <i class="fas fa-circle text-success"></i> Successful
+                        </span>
+                        <span class="mr-2">
+                            <i class="fas fa-circle text-danger"></i> Failed
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Health -->
+        <div class="col-xl-4 col-md-6 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">System Health</h6>
+                </div>
+                <div class="card-body">
+                    {% if system_health %}
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>CPU Usage</span>
+                            <span class="text-{{ system_health.cpu_usage < 70 %}success{% else %}warning{% endif %}">
+                                {{ system_health.cpu_usage }}%
+                            </span>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar bg-{{ system_health.cpu_usage < 70 %}success{% else %}warning{% endif %}" 
+                                 role="progressbar" style="width: {{ system_health.cpu_usage }}%"></div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>Memory Usage</span>
+                            <span class="text-{{ system_health.memory_usage < 75 %}success{% else %}warning{% endif %}">
+                                {{ system_health.memory_usage }}%
+                            </span>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar bg-{{ system_health.memory_usage < 75 %}success{% else %}warning{% endif %}" 
+                                 role="progressbar" style="width: {{ system_health.memory_usage }}%"></div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>Disk Usage</span>
+                            <span class="text-{{ system_health.disk_usage < 80 %}success{% else %}warning{% endif %}">
+                                {{ system_health.disk_usage }}%
+                            </span>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar bg-{{ system_health.disk_usage < 80 %}success{% else %}warning{% endif %}" 
+                                 role="progressbar" style="width: {{ system_health.disk_usage }}%"></div>
+                        </div>
+                    </div>
+                    <div class="text-center mt-4">
+                        <span class="badge bg-{{ system_health.system_status == 'healthy' }}success{% else %}warning{% endif %}">
+                            <i class="fas fa-{{ system_health.system_status == 'healthy' }}check{% else %}exclamation-triangle{% endif %} me-1"></i>
+                            System: {{ system_health.system_status|title }}
+                        </span>
+                    </div>
+                    {% else %}
+                    <p class="text-muted">System health data unavailable</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="col-xl-4 col-md-12 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Quick Actions</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row g-2">
+                        {% for action in quick_actions %}
+                        <div class="col-6">
+                            <a href="{{ action.url }}" class="btn btn-{{ action.color }} w-100 mb-2">
+                                <span style="font-size: 1.2em;">{{ action.icon }}</span><br>
+                                <small>{{ action.name }}</small>
+                            </a>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity and AFZ Info Row -->
+    <div class="row">
+        <!-- Recent Activity -->
+        <div class="col-xl-8 col-lg-7">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">Recent Activity</h6>
+                    <div class="dropdown no-arrow">
+                        <a class="dropdown-toggle" href="#" role="button" id="dropdownMenuLink" 
+                           data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>
+                        </a>
+                        <div class="dropdown-menu dropdown-menu-right shadow animated--fade-in"
+                             aria-labelledby="dropdownMenuLink">
+                            <div class="dropdown-header">Filter:</div>
+                            <a class="dropdown-item" href="#" onclick="filterActivities('all')">All</a>
+                            <a class="dropdown-item" href="#" onclick="filterActivities('success')">Successful</a>
+                            <a class="dropdown-item" href="#" onclick="filterActivities('failed')">Failed</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered" id="activityTable" width="100%" cellspacing="0">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Method</th>
+                                    <th>Status</th>
+                                    <th>IP Address</th>
+                                    <th>Timestamp</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for activity in recent_activity %}
+                                <tr class="activity-row" data-status="{{ activity.status|lower }}">
+                                    <td>
+                                        <strong>{{ activity.user.username|default:"Unknown" }}</strong>
+                                    </td>
+                                    <td>
+                                        {% if activity.login_method == 'Face Recognition' %}
+                                            <span class="badge bg-info">
+                                                <i class="fas fa-camera me-1"></i>{{ activity.login_method }}
+                                            </span>
+                                        {% elif activity.login_method == '2FA' %}
+                                            <span class="badge bg-warning">
+                                                <i class="fas fa-mobile-alt me-1"></i>{{ activity.login_method }}
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ activity.login_method }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if activity.status == 'Success' %}
+                                            <span class="badge bg-success">
+                                                <i class="fas fa-check me-1"></i>{{ activity.status }}
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-danger">
+                                                <i class="fas fa-times me-1"></i>{{ activity.status }}
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td><code>{{ activity.ip_address|default:"N/A" }}</code></td>
+                                    <td>{{ activity.timestamp|date:"M d, Y H:i:s" }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center">No recent activity</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AFZ System Info -->
+        <div class="col-xl-4 col-lg-5">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">AFZ System Information</h6>
+                </div>
+                <div class="card-body">
+                    {% if afz_data %}
+                    <div class="text-center mb-4">
+                        <i class="fas fa-shield-alt fa-3x text-primary mb-3"></i>
+                        <h5 class="text-primary">{{ afz_data.system_name }}</h5>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <strong>Version:</strong>
+                            <span class="float-end badge bg-secondary">{{ afz_data.version }}</span>
+                        </div>
+                        <div class="col-12">
+                            <strong>Security Level:</strong>
+                            <span class="float-end badge bg-danger">{{ afz_data.security_level }}</span>
+                        </div>
+                        <div class="col-12">
+                            <strong>Encryption:</strong>
+                            <span class="float-end badge bg-success">{{ afz_data.encryption_status }}</span>
+                        </div>
+                        <div class="col-12">
+                            <strong>Biometric System:</strong>
+                            <span class="float-end badge bg-info">{{ afz_data.biometric_status }}</span>
+                        </div>
+                        <div class="col-12">
+                            <strong>Last Security Scan:</strong>
+                            <span class="float-end text-muted">{{ afz_data.last_security_scan }}</span>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted">
+                        <i class="fas fa-info-circle fa-2x mb-3"></i>
+                        <p>System information unavailable</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Additional Stats -->
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Additional Statistics</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-6 mb-3">
+                            <div class="text-primary">
+                                <i class="fas fa-user-plus fa-2x mb-2"></i>
+                                <div class="h5">{{ stats.new_users_today|default:"0" }}</div>
+                                <small>New Users Today</small>
+                            </div>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <div class="text-success">
+                                <i class="fas fa-fingerprint fa-2x mb-2"></i>
+                                <div class="h5">{{ stats.verified_users|default:"0" }}</div>
+                                <small>Face Enrolled</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-info">
+                                <i class="fas fa-chart-line fa-2x mb-2"></i>
+                                <div class="h5">{{ stats.overall_success_rate|default:"0" }}%</div>
+                                <small>Success Rate</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-warning">
+                                <i class="fas fa-bolt fa-2x mb-2"></i>
+                                <div class="h5">{{ stats.response_time|default:"0ms" }}</div>
+                                <small>Avg Response</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
-    // Dashboard data loading
-    async function loadDashboardData() {
-        try {
-            // Load recent access logs
-            const logsResponse = await fetch('/api/verification/access-logs/');
-            if (logsResponse.ok) {
-                const logsData = await logsResponse.json();
-                const logsContainer = document.getElementById('recentLogs');
-                logsContainer.innerHTML = '';
-                
-                if (logsData.length > 0) {
-                    logsData.slice(0, 10).forEach(log => {
-                        const logElement = document.createElement('div');
-                        logElement.style.padding = '0.75rem';
-                        logElement.style.borderBottom = '1px solid #eee';
-                        logElement.style.display = 'flex';
-                        logElement.style.justifyContent = 'space-between';
-                        logElement.style.alignItems = 'center';
-                        
-                        const statusColor = log.verified_by_face ? '#28a745' : '#dc3545';
-                        const statusText = log.verified_by_face ? '✓ Verified' : '✗ Failed';
-                        
-                        logElement.innerHTML = `
-                            <div>
-                                <strong>${log.user_name || 'Unknown User'}</strong> - 
-                                <span style="text-transform: capitalize;">${log.action}</span>
-                                <span style="color: ${statusColor}; margin-left: 0.5rem;">${statusText}</span>
-                            </div>
-                            <span style="color: #666; font-size: 0.9rem;">${new Date(log.timestamp).toLocaleString()}</span>
-                        `;
-                        logsContainer.appendChild(logElement);
-                    });
-                } else {
-                    logsContainer.innerHTML = '<p>No access logs found.</p>';
+// Initialize charts and real-time updates
+document.addEventListener('DOMContentLoaded', function() {
+    // Success Rate Chart
+    const successRateCtx = document.getElementById('successRateChart').getContext('2d');
+    const successRateChart = new Chart(successRateCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Successful', 'Failed'],
+            datasets: [{
+                data: [
+                    {{ stats.successful_logins|default:0 }},
+                    {{ stats.failed_logins|default:0 }}
+                ],
+                backgroundColor: ['#28a745', '#dc3545'],
+                hoverBackgroundColor: ['#218838', '#c82333'],
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            maintainAspectRatio: false,
+            cutout: '70%',
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.raw || 0;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                            return `${label}: ${value} (${percentage}%)`;
+                        }
+                    }
                 }
             }
-            
-            // Update counters (mock data for now - you can replace with actual API calls)
-            document.getElementById('todayLogins').textContent = '12';
-            document.getElementById('activeVisitors').textContent = '3';
-            document.getElementById('pendingApprovals').textContent = '2';
-            document.getElementById('securityAlerts').textContent = '0';
-            
-        } catch (error) {
-            console.error('Error loading dashboard data:', error);
-            document.getElementById('recentLogs').innerHTML = '<p>Error loading access logs. Please try again later.</p>';
         }
+    });
+
+    // Real-time data updates
+    function updateDashboardData() {
+        fetch('/verification/api/dashboard/')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Update statistics
+                    document.querySelectorAll('.stat-card h4').forEach((el, index) => {
+                        const stats = Object.values(data.stats);
+                        if (stats[index] !== undefined) {
+                            el.textContent = stats[index];
+                        }
+                    });
+
+                    // Update last update time
+                    document.getElementById('lastUpdateTime').textContent = 
+                        new Date().toLocaleString();
+
+                    // Update chart data
+                    successRateChart.data.datasets[0].data = [
+                        data.stats.successful_logins,
+                        data.stats.failed_logins
+                    ];
+                    successRateChart.update();
+                }
+            })
+            .catch(error => console.error('Error updating dashboard:', error));
     }
 
-    function generateReport() {
-        alert('Report generation feature will be implemented soon.');
-    }
+    // Update every 30 seconds
+    setInterval(updateDashboardData, 30000);
 
-    function viewSecurityLogs() {
-        alert('Security logs feature will be implemented soon.');
-    }
-    
-    // Load data when page loads
-    window.addEventListener('load', loadDashboardData);
-    
-    // Refresh data every 30 seconds
-    setInterval(loadDashboardData, 30000);
+    // Activity filtering
+    window.filterActivities = function(status) {
+        const rows = document.querySelectorAll('.activity-row');
+        rows.forEach(row => {
+            if (status === 'all' || row.dataset.status === status) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    };
+});
+
+// Auto-refresh page every 5 minutes
+setTimeout(() => {
+    window.location.reload();
+}, 300000);
 </script>
+
+<style>
+.card {
+    border: none;
+    border-radius: 0.5rem;
+}
+
+.border-left-primary {
+    border-left: 0.25rem solid #4e73df !important;
+}
+
+.border-left-success {
+    border-left: 0.25rem solid #1cc88a !important;
+}
+
+.border-left-info {
+    border-left: 0.25rem solid #36b9cc !important;
+}
+
+.border-left-warning {
+    border-left: 0.25rem solid #f6c23e !important;
+}
+
+.shadow {
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15) !important;
+}
+
+.text-xs {
+    font-size: 0.7rem;
+}
+
+.text-gray-800 {
+    color: #5a5c69 !important;
+}
+
+.text-gray-300 {
+    color: #dddfeb !important;
+}
+
+.chart-pie {
+    position: relative;
+    height: 200px;
+    width: 100%;
+}
+
+.progress {
+    height: 8px;
+}
+
+.btn-action {
+    transition: all 0.3s ease;
+}
+
+.btn-action:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+</style>
 {% endblock %}

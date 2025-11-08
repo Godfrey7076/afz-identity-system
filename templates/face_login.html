@@ -1,332 +1,535 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Face Recognition Login</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background: #f5f5f5;
-        }
-        .login-container {
-            background: white;
-            padding: 2rem;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        .step {
-            display: none;
-            margin-bottom: 1rem;
-        }
-        .step.active {
-            display: block;
-        }
-        .video-container {
-            position: relative;
-            width: 100%;
-            max-width: 500px;
-            margin: 1rem auto;
-        }
-        video {
-            width: 100%;
-            border: 2px solid #003366;
-            border-radius: 8px;
-        }
-        canvas {
-            display: none;
-        }
-        .button {
-            padding: 12px 24px;
-            background: #003366;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            margin: 0.5rem;
-        }
-        .button:disabled {
-            background: #6c757d;
-            cursor: not-allowed;
-        }
-        .button.success {
-            background: #28a745;
-        }
-        .result {
-            padding: 1rem;
-            border-radius: 4px;
-            margin: 1rem 0;
-        }
-        .success-message {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        .error-message {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        .warning-message {
-            background: #fff3cd;
-            color: #856404;
-            border: 1px solid #ffeaa7;
-        }
-        .user-info {
-            background: #e9ecef;
-            padding: 1rem;
-            border-radius: 4px;
-            margin: 1rem 0;
-        }
-        .form-group {
-            margin-bottom: 1rem;
-        }
-        label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-weight: bold;
-        }
-        input[type="text"] {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 16px;
-        }
-    </style>
-</head>
-<body>
-    <div class="login-container">
-        <h1>Face Recognition Login</h1>
-        
-        <!-- Step 1: Security Number Input -->
-        <div id="step1" class="step active">
-            <h2>Enter Your Security Number</h2>
-            <div class="form-group">
-                <label for="securityNumber">Security Number:</label>
-                <input type="text" id="securityNumber" placeholder="Enter your security number">
-            </div>
-            <button id="checkUserBtn" class="button">Continue</button>
-            <div id="step1Result"></div>
-        </div>
+{% extends 'base.html' %}
+{% load static %}
 
-        <!-- Step 2: Face Verification -->
-        <div id="step2" class="step">
-            <h2>Face Verification</h2>
-            <div id="userInfo" class="user-info"></div>
-            
-            <div class="video-container">
-                <video id="video" autoplay playsinline></video>
-                <canvas id="canvas"></canvas>
-            </div>
-            
-            <div style="text-align: center;">
-                <button id="captureBtn" class="button">Capture Face</button>
-                <button id="verifyBtn" class="button" disabled>Verify Identity</button>
-            </div>
-            
-            <div id="step2Result"></div>
-        </div>
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-lg border-0">
+                <div class="card-header bg-primary text-white text-center py-4">
+                    <h2 class="mb-0">
+                        <i class="fas fa-camera me-2"></i>AFZ Biometric Face Login
+                    </h2>
+                    <p class="mb-0 mt-2 opacity-75">Secure Identity Verification System</p>
+                </div>
+                
+                <div class="card-body p-4">
+                    <!-- Step 1: Security Number Input -->
+                    <div id="step1" class="step active">
+                        <div class="text-center mb-4">
+                            <div class="mb-3">
+                                <i class="fas fa-id-card fa-3x text-primary"></i>
+                            </div>
+                            <h3 class="text-primary">Enter Security Credentials</h3>
+                            <p class="text-muted">Please provide your security number to begin face verification</p>
+                        </div>
+                        
+                        <div class="form-group mb-4">
+                            <label for="securityNumber" class="form-label fw-bold">Security Number:</label>
+                            <input type="text" id="securityNumber" class="form-control form-control-lg" 
+                                   placeholder="Enter your security number" required>
+                            <div class="form-text">Your unique identification number provided by AFZ administration</div>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button id="checkUserBtn" class="btn btn-primary btn-lg">
+                                <i class="fas fa-arrow-right me-2"></i>Continue to Face Verification
+                            </button>
+                        </div>
+                        
+                        <div id="step1Result" class="mt-3"></div>
+                    </div>
 
-        <!-- Step 3: Success -->
-        <div id="step3" class="step">
-            <h2>Login Successful!</h2>
-            <div id="successResult" class="result success-message"></div>
-            <button id="restartBtn" class="button">Login Again</button>
+                    <!-- Step 2: Face Verification -->
+                    <div id="step2" class="step">
+                        <div class="text-center mb-4">
+                            <div class="mb-3">
+                                <i class="fas fa-user-shield fa-3x text-primary"></i>
+                            </div>
+                            <h3 class="text-primary">Face Verification</h3>
+                            <p class="text-muted">Position your face in the camera view below</p>
+                        </div>
+                        
+                        <div id="userInfo" class="alert alert-info mb-4">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-user-circle fa-2x me-3"></i>
+                                <div>
+                                    <strong id="userName">User Information</strong>
+                                    <div id="userDetails" class="small"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="video-container mb-4">
+                            <div class="position-relative">
+                                <video id="video" class="rounded shadow" autoplay playsinline></video>
+                                <div class="face-overlay">
+                                    <div class="face-guide"></div>
+                                </div>
+                                <div class="camera-status text-center mt-2">
+                                    <small class="text-muted">
+                                        <i class="fas fa-camera me-1"></i>Camera Active
+                                    </small>
+                                </div>
+                            </div>
+                            <canvas id="canvas" class="d-none"></canvas>
+                        </div>
+                        
+                        <div class="text-center mb-4">
+                            <div class="btn-group" role="group">
+                                <button id="captureBtn" class="btn btn-warning btn-lg">
+                                    <i class="fas fa-camera me-2"></i>Capture Face
+                                </button>
+                                <button id="verifyBtn" class="btn btn-success btn-lg" disabled>
+                                    <i class="fas fa-check-circle me-2"></i>Verify Identity
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="text-center">
+                            <button id="backToStep1" class="btn btn-outline-secondary btn-sm">
+                                <i class="fas fa-arrow-left me-1"></i>Back to Security Number
+                            </button>
+                        </div>
+                        
+                        <div id="step2Result" class="mt-3"></div>
+                    </div>
+
+                    <!-- Step 3: Success -->
+                    <div id="step3" class="step">
+                        <div class="text-center mb-4">
+                            <div class="mb-3">
+                                <i class="fas fa-check-circle fa-3x text-success"></i>
+                            </div>
+                            <h3 class="text-success">Access Granted!</h3>
+                            <p class="text-muted">Biometric verification successful</p>
+                        </div>
+                        
+                        <div id="successResult" class="alert alert-success mb-4">
+                            <div class="text-center">
+                                <h4 id="welcomeMessage" class="text-success mb-3"></h4>
+                                <div id="userDetailsSuccess" class="mb-3"></div>
+                                <div class="confidence-badge mb-3">
+                                    <span class="badge bg-success fs-6 p-2">
+                                        <i class="fas fa-shield-alt me-1"></i>
+                                        Verification Confidence: <span id="confidenceValue">0</span>%
+                                    </span>
+                                </div>
+                                <p class="mb-0">You now have access to the AFZ Identity System</p>
+                            </div>
+                        </div>
+                        
+                        <div class="text-center">
+                            <div class="btn-group" role="group">
+                                <button id="goToDashboard" class="btn btn-primary btn-lg">
+                                    <i class="fas fa-tachometer-alt me-2"></i>Go to Dashboard
+                                </button>
+                                <button id="restartBtn" class="btn btn-outline-primary btn-lg">
+                                    <i class="fas fa-redo me-2"></i>Login Again
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card-footer text-center py-3">
+                    <small class="text-muted">
+                        <i class="fas fa-lock me-1"></i>
+                        Secure AFZ Biometric Authentication • Military Grade Encryption
+                    </small>
+                </div>
+            </div>
+            
+            <!-- Alternative Login Options -->
+            <div class="text-center mt-4">
+                <p class="text-muted mb-2">Alternative Access Methods</p>
+                <div class="btn-group" role="group">
+                    <a href="{% url 'admin_login' %}" class="btn btn-outline-primary">
+                        <i class="fas fa-key me-1"></i>Staff Login
+                    </a>
+                    <a href="/" class="btn btn-outline-secondary">
+                        <i class="fas fa-home me-1"></i>Return Home
+                    </a>
+                </div>
+            </div>
         </div>
     </div>
+</div>
+{% endblock %}
 
-    <script>
-        let stream = null;
-        let capturedImage = null;
-        let currentUser = null;
-        const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const context = canvas.getContext('2d');
+{% block extra_css %}
+<style>
+.step {
+    display: none;
+    animation: fadeIn 0.5s ease-in;
+}
 
-        // Step Management
-        function showStep(stepNumber) {
-            document.querySelectorAll('.step').forEach(step => {
-                step.classList.remove('active');
-            });
-            document.getElementById(`step${stepNumber}`).classList.add('active');
-        }
+.step.active {
+    display: block;
+}
 
-        // Step 1: Check User
-        document.getElementById('checkUserBtn').addEventListener('click', async function() {
-            const securityNumber = document.getElementById('securityNumber').value.trim();
-            const resultDiv = document.getElementById('step1Result');
-            
-            if (!securityNumber) {
-                resultDiv.innerHTML = '<div class="error-message">Please enter your security number</div>';
-                return;
-            }
+.video-container {
+    position: relative;
+    max-width: 500px;
+    margin: 0 auto;
+}
 
-            const button = this;
-            button.disabled = true;
-            button.textContent = 'Checking...';
+video {
+    width: 100%;
+    border: 3px solid #003366;
+    border-radius: 10px;
+    background: #000;
+}
 
-            try {
-                const response = await fetch(`/api/verification/verification/check_registration/?security_number=${securityNumber}`);
-                const data = await response.json();
+.face-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
 
-                if (data.success) {
-                    if (data.registered) {
-                        currentUser = data.user;
-                        document.getElementById('userInfo').innerHTML = `
-                            <strong>User:</strong> ${data.user.username}<br>
-                            <strong>Security Number:</strong> ${data.user.security_number}<br>
-                            <strong>Unit:</strong> ${data.user.unit}
-                        `;
-                        showStep(2);
-                        startWebcam();
-                    } else {
-                        resultDiv.innerHTML = `
-                            <div class="warning-message">
-                                No face registered for this user. Please contact administrator to register your face.
-                            </div>
-                        `;
-                    }
-                } else {
-                    resultDiv.innerHTML = `<div class="error-message">${data.message}</div>`;
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                resultDiv.innerHTML = '<div class="error-message">Network error. Please try again.</div>';
-            } finally {
-                button.disabled = false;
-                button.textContent = 'Continue';
-            }
-        });
+.face-guide {
+    width: 200px;
+    height: 250px;
+    border: 2px solid rgba(255, 215, 0, 0.6);
+    border-radius: 45%;
+    background: transparent;
+    animation: pulse 2s infinite;
+}
 
-        // Webcam Functions
-        async function startWebcam() {
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        width: 640, 
-                        height: 480,
-                        facingMode: 'user'
-                    } 
-                });
-                video.srcObject = stream;
-            } catch (err) {
-                console.error('Error accessing webcam:', err);
-                document.getElementById('step2Result').innerHTML = 
-                    '<div class="error-message">Error accessing webcam. Please ensure your camera is connected and permissions are granted.</div>';
-            }
-        }
+.camera-status {
+    background: rgba(0, 51, 102, 0.1);
+    padding: 0.5rem;
+    border-radius: 5px;
+}
 
-        function captureFrame() {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            context.drawImage(video, 0, 0);
-            return canvas.toDataURL('image/jpeg', 0.8);
-        }
+.confidence-badge {
+    animation: bounce 1s ease;
+}
 
-        // Step 2: Capture Face
-        document.getElementById('captureBtn').addEventListener('click', function() {
-            capturedImage = captureFrame();
-            document.getElementById('verifyBtn').disabled = false;
-            document.getElementById('step2Result').innerHTML = 
-                '<div class="warning-message">✅ Face captured. Click "Verify Identity" to continue.</div>';
-        });
+.btn-group .btn {
+    margin: 0 0.25rem;
+}
 
-        // Step 2: Verify Face
-        document.getElementById('verifyBtn').addEventListener('click', async function() {
-            if (!capturedImage || !currentUser) {
-                alert('Please capture a face first.');
-                return;
-            }
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
 
-            const verifyBtn = this;
-            verifyBtn.disabled = true;
-            verifyBtn.textContent = 'Verifying...';
+@keyframes pulse {
+    0% { border-color: rgba(255, 215, 0, 0.6); }
+    50% { border-color: rgba(255, 215, 0, 0.9); }
+    100% { border-color: rgba(255, 215, 0, 0.6); }
+}
 
-            try {
-                const response = await fetch('/api/verification/verification/verify_face/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken')
-                    },
-                    body: JSON.stringify({
-                        security_number: currentUser.security_number,
-                        image: capturedImage
-                    })
-                });
+@keyframes bounce {
+    0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+    40% { transform: translateY(-10px); }
+    60% { transform: translateY(-5px); }
+}
 
-                const data = await response.json();
-                const resultDiv = document.getElementById('step2Result');
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .video-container {
+        max-width: 100%;
+    }
+    
+    .face-guide {
+        width: 150px;
+        height: 200px;
+    }
+    
+    .btn-group {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .btn-group .btn {
+        margin: 0;
+    }
+}
+</style>
+{% endblock %}
 
-                if (data.success) {
-                    document.getElementById('successResult').innerHTML = `
-                        <h3>Welcome, ${data.user.username}!</h3>
-                        <p>Face verification successful with ${(data.confidence * 100).toFixed(1)}% confidence</p>
-                        <p><strong>Security Number:</strong> ${data.user.security_number}</p>
-                        <p><strong>Unit:</strong> ${data.user.unit}</p>
-                        <p>You now have access to the system.</p>
-                    `;
-                    showStep(3);
-                    
-                    // Stop webcam
-                    if (stream) {
-                        stream.getTracks().forEach(track => track.stop());
-                    }
-                } else {
-                    resultDiv.innerHTML = `<div class="error-message">${data.message}</div>`;
-                    verifyBtn.disabled = false;
-                    verifyBtn.textContent = 'Verify Identity';
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                document.getElementById('step2Result').innerHTML = 
-                    '<div class="error-message">Network error. Please try again.</div>';
-                verifyBtn.disabled = false;
-                verifyBtn.textContent = 'Verify Identity';
-            }
-        });
+{% block extra_js %}
+<script>
+let stream = null;
+let capturedImage = null;
+let currentUser = null;
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const context = canvas.getContext('2d');
 
-        // Restart Process
-        document.getElementById('restartBtn').addEventListener('click', function() {
-            // Reset form
-            document.getElementById('securityNumber').value = '';
-            currentUser = null;
-            capturedImage = null;
-            showStep(1);
-            
-            // Restart webcam if needed
-            if (!stream) {
+// Step Management
+function showStep(stepNumber) {
+    document.querySelectorAll('.step').forEach(step => {
+        step.classList.remove('active');
+    });
+    document.getElementById(`step${stepNumber}`).classList.add('active');
+}
+
+// Step 1: Check User
+document.getElementById('checkUserBtn').addEventListener('click', async function() {
+    const securityNumber = document.getElementById('securityNumber').value.trim();
+    const resultDiv = document.getElementById('step1Result');
+    
+    if (!securityNumber) {
+        resultDiv.innerHTML = `
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                Please enter your security number
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+        return;
+    }
+
+    const button = this;
+    const originalText = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Verifying Security Number...';
+
+    try {
+        // Using the correct API endpoint from your URLs
+        const response = await fetch(`/verification/api/verification/check_registration/?user_id=${securityNumber}`);
+        const data = await response.json();
+
+        if (data.success) {
+            if (data.registered) {
+                currentUser = data.user;
+                document.getElementById('userName').textContent = data.user.username;
+                document.getElementById('userDetails').innerHTML = `
+                    Security Number: ${securityNumber}<br>
+                    Status: <span class="badge bg-success">Face Registered</span>
+                `;
+                showStep(2);
                 startWebcam();
+            } else {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                        <i class="fas fa-user-slash me-2"></i>
+                        No face registered for this security number. Please contact AFZ administration to register your biometric data.
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                `;
             }
+        } else {
+            resultDiv.innerHTML = `
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="fas fa-times-circle me-2"></i>
+                    ${data.message || 'Invalid security number or user not found'}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        resultDiv.innerHTML = `
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="fas fa-wifi me-2"></i>
+                Network error. Please check your connection and try again.
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+    } finally {
+        button.disabled = false;
+        button.innerHTML = originalText;
+    }
+});
+
+// Webcam Functions
+async function startWebcam() {
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+                width: { ideal: 640 },
+                height: { ideal: 480 },
+                facingMode: 'user'
+            } 
+        });
+        video.srcObject = stream;
+        
+        // Add event listener for video to start playing
+        video.addEventListener('loadedmetadata', () => {
+            console.log('Webcam started successfully');
+        });
+        
+    } catch (err) {
+        console.error('Error accessing webcam:', err);
+        document.getElementById('step2Result').innerHTML = `
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="fas fa-video-slash me-2"></i>
+                Error accessing webcam. Please ensure your camera is connected and permissions are granted.
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+    }
+}
+
+function captureFrame() {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    context.drawImage(video, 0, 0);
+    return canvas.toDataURL('image/jpeg', 0.8);
+}
+
+// Step 2: Capture Face
+document.getElementById('captureBtn').addEventListener('click', function() {
+    capturedImage = captureFrame();
+    document.getElementById('verifyBtn').disabled = false;
+    document.getElementById('step2Result').innerHTML = `
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle me-2"></i>
+            Face captured successfully! Click "Verify Identity" to continue.
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+});
+
+// Step 2: Verify Face
+document.getElementById('verifyBtn').addEventListener('click', async function() {
+    if (!capturedImage || !currentUser) {
+        document.getElementById('step2Result').innerHTML = `
+            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                Please capture a face image first.
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+        return;
+    }
+
+    const verifyBtn = this;
+    const originalText = verifyBtn.innerHTML;
+    verifyBtn.disabled = true;
+    verifyBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Verifying Identity...';
+
+    try {
+        const response = await fetch('/verification/api/verification/verify_face/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                user_id: currentUser.id,
+                image: capturedImage
+            })
         });
 
-        // Utility function to get CSRF token
-        function getCookie(name) {
-            let cookieValue = null;
-            if (document.cookie && document.cookie !== '') {
-                const cookies = document.cookie.split(';');
-                for (let i = 0; i < cookies.length; i++) {
-                    const cookie = cookies[i].trim();
-                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                        break;
-                    }
-                }
-            }
-            return cookieValue;
-        }
+        const data = await response.json();
+        const resultDiv = document.getElementById('step2Result');
 
-        // Stop webcam when leaving page
-        window.addEventListener('beforeunload', function() {
+        if (data.success) {
+            document.getElementById('welcomeMessage').textContent = `Welcome, ${data.user.username}!`;
+            document.getElementById('userDetailsSuccess').innerHTML = `
+                <p><strong>Security Number:</strong> ${currentUser.id}</p>
+                <p><strong>Verification Method:</strong> Biometric Face Recognition</p>
+                <p><strong>Timestamp:</strong> ${new Date().toLocaleString()}</p>
+            `;
+            document.getElementById('confidenceValue').textContent = data.confidence || '95';
+            
+            showStep(3);
+            
+            // Stop webcam
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
             }
-        });
-    </script>
-</body>
-</html>
+            
+            // Redirect to dashboard after 3 seconds
+            setTimeout(() => {
+                window.location.href = '/verification/dashboard/';
+            }, 3000);
+            
+        } else {
+            resultDiv.innerHTML = `
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="fas fa-times-circle me-2"></i>
+                    ${data.message || 'Face verification failed. Please try again.'}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            verifyBtn.disabled = false;
+            verifyBtn.innerHTML = originalText;
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('step2Result').innerHTML = `
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="fas fa-wifi me-2"></i>
+                Network error during verification. Please try again.
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+        verifyBtn.disabled = false;
+        verifyBtn.innerHTML = originalText;
+    }
+});
+
+// Navigation Buttons
+document.getElementById('backToStep1').addEventListener('click', function() {
+    showStep(1);
+    // Stop webcam when going back
+    if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+    }
+});
+
+document.getElementById('goToDashboard').addEventListener('click', function() {
+    window.location.href = '/verification/dashboard/';
+});
+
+document.getElementById('restartBtn').addEventListener('click', function() {
+    // Reset form
+    document.getElementById('securityNumber').value = '';
+    currentUser = null;
+    capturedImage = null;
+    showStep(1);
+    
+    // Clear results
+    document.getElementById('step1Result').innerHTML = '';
+    document.getElementById('step2Result').innerHTML = '';
+});
+
+// Utility function to get CSRF token
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Stop webcam when leaving page
+window.addEventListener('beforeunload', function() {
+    if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+    }
+});
+
+// Enter key support for security number input
+document.getElementById('securityNumber').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        document.getElementById('checkUserBtn').click();
+    }
+});
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('AFZ Face Login System Initialized');
+});
+</script>
+{% endblock %}

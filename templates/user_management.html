@@ -1,172 +1,576 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User Management - AFZ Identity System</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+{% extends 'base.html' %}
+{% load static %}
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #f5f5f5;
-            color: #333;
-            line-height: 1.6;
-        }
-
-        .navbar {
-            background: #003366;
-            color: white;
-            padding: 1rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        .navbar-brand {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #FFD700;
-        }
-
-        .navbar-nav {
-            display: flex;
-            list-style: none;
-            gap: 1rem;
-            flex-wrap: wrap;
-        }
-
-        .navbar-nav a {
-            color: white;
-            text-decoration: none;
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
-            transition: background-color 0.3s;
-        }
-
-        .navbar-nav a:hover,
-        .navbar-nav a.active {
-            background-color: #004080;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
-
-        .page-header {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-
-        .page-header h1 {
-            color: #003366;
-            margin-bottom: 0.5rem;
-        }
-
-        .users-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 1.5rem;
-        }
-
-        .user-card {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 10px;
-            box-shadow: 0 3px 15px rgba(0,0,0,0.1);
-            border-left: 4px solid #003366;
-        }
-
-        .user-name {
-            font-size: 1.2rem;
-            font-weight: bold;
-            color: #003366;
-            margin-bottom: 0.5rem;
-        }
-
-        .user-detail {
-            margin-bottom: 0.5rem;
-            color: #666;
-        }
-
-        .status-verified {
-            color: #28a745;
-            font-weight: bold;
-        }
-
-        .status-pending {
-            color: #ffc107;
-            font-weight: bold;
-        }
-
-        @media (max-width: 768px) {
-            .container {
-                padding: 1rem;
-            }
-            
-            .users-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .navbar {
-                flex-direction: column;
-                gap: 1rem;
-                text-align: center;
-            }
-        }
-    </style>
-</head>
-<body>
-    <nav class="navbar">
-        <div class="navbar-brand">
-            Air Force Zimbabwe - User Management
+{% block content %}
+<div class="container-fluid">
+    <!-- Header Section -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1 text-primary">
+                <i class="fas fa-users me-2"></i>Personnel Management
+            </h1>
+            <p class="text-muted mb-0">Manage AFZ personnel and access permissions</p>
         </div>
-        <ul class="navbar-nav">
-            <li><a href="/">Home</a></li>
-            <li><a href="/verification/dashboard/">Dashboard</a></li>
-            <li><a href="/verification/user-management/" class="active">User Management</a></li>
-            <li><a href="/verification/visitor-management/">Visitor Management</a></li>
-            <li><a href="/verification/login/">Face Login</a></li>
-            <li><a href="/admin/">Admin</a></li>
-        </ul>
-    </nav>
-    
-    <div class="container">
-        <div class="page-header">
-            <h1>User Management</h1>
-            <p>Manage system users and their access permissions</p>
-        </div>
-
-        <div class="users-grid">
-            {% for user in users %}
-            <div class="user-card">
-                <div class="user-name">{{ user.username }}</div>
-                <div class="user-detail"><strong>Security Number:</strong> {{ user.security_number }}</div>
-                <div class="user-detail"><strong>Unit:</strong> {{ user.unit }}</div>
-                <div class="user-detail"><strong>User Type:</strong> {{ user.get_user_type_display }}</div>
-                <div class="user-detail">
-                    <strong>Status:</strong> 
-                    {% if user.is_verified %}
-                    <span class="status-verified">✅ Verified</span>
-                    {% else %}
-                    <span class="status-pending">⏳ Pending</span>
-                    {% endif %}
-                </div>
-                <div class="user-detail"><strong>Joined:</strong> {{ user.date_joined|date:"M d, Y" }}</div>
-            </div>
-            {% empty %}
-            <div class="no-users" style="text-align: center; grid-column: 1 / -1; padding: 3rem; color: #666;">
-                No users found in the system.
-            </div>
-            {% endfor %}
+        <div class="text-end">
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addUserModal">
+                <i class="fas fa-user-plus me-2"></i>Add Personnel
+            </button>
+            <button class="btn btn-outline-secondary" onclick="exportUsers()">
+                <i class="fas fa-download me-2"></i>Export
+            </button>
         </div>
     </div>
-</body>
-</html>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total Personnel
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.total_users }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-users fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Face Enrolled
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.users_with_face }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-camera fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Active Personnel
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.active_users }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-user-check fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Recent Registrations
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.recent_registrations }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-user-plus fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters and Search -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Filters & Search</h6>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" id="statusFilter">
+                        <option value="">All Status</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Face Enrollment</label>
+                    <select class="form-select" id="faceEnrolledFilter">
+                        <option value="">All</option>
+                        <option value="true">Face Enrolled</option>
+                        <option value="false">Not Enrolled</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Search</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="searchInput" placeholder="Search by name, email, or username...">
+                        <button class="btn btn-outline-primary" type="button" onclick="applyFilters()">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="card shadow">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">Personnel Records</h6>
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="fas fa-cog me-2"></i>Actions
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="#" onclick="bulkAction('activate')">Activate Selected</a></li>
+                    <li><a class="dropdown-item" href="#" onclick="bulkAction('deactivate')">Deactivate Selected</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="#" onclick="exportUsers()">Export to CSV</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="usersTable" width="100%" cellspacing="0">
+                    <thead class="table-light">
+                        <tr>
+                            <th width="30">
+                                <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                            </th>
+                            <th>Personnel</th>
+                            <th>Contact</th>
+                            <th>Face Enrollment</th>
+                            <th>Status</th>
+                            <th>Last Login</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr data-user-id="{{ user.id }}" 
+                            data-status="{{ user.is_active|yesno:'active,inactive' }}"
+                            data-face-enrolled="{{ user.userprofile.face_enrolled|yesno:'true,false' }}">
+                            <td>
+                                <input type="checkbox" class="user-checkbox" value="{{ user.id }}">
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="avatar-circle me-3">
+                                        <span class="avatar-text">{{ user.username|first|upper }}</span>
+                                    </div>
+                                    <div>
+                                        <strong class="text-primary">{{ user.username }}</strong>
+                                        <div class="small text-muted">
+                                            {{ user.first_name }} {{ user.last_name }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="small">
+                                    <div><i class="fas fa-envelope me-2 text-muted"></i>{{ user.email }}</div>
+                                    {% if user.userprofile.phone %}
+                                    <div><i class="fas fa-phone me-2 text-muted"></i>{{ user.userprofile.phone }}</div>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                {% if user.userprofile.face_enrolled %}
+                                <span class="badge bg-success">
+                                    <i class="fas fa-camera me-1"></i>Enrolled
+                                </span>
+                                <div class="small text-muted">
+                                    {{ user.userprofile.face_enrollment_date|date:"M d, Y"|default:"N/A" }}
+                                </div>
+                                {% else %}
+                                <span class="badge bg-secondary">
+                                    <i class="fas fa-camera-slash me-1"></i>Not Enrolled
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if user.is_active %}
+                                <span class="badge bg-success">
+                                    <i class="fas fa-check-circle me-1"></i>Active
+                                </span>
+                                {% else %}
+                                <span class="badge bg-danger">
+                                    <i class="fas fa-times-circle me-1"></i>Inactive
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if user.last_login %}
+                                <div class="small">
+                                    <div>{{ user.last_login|date:"M d, Y" }}</div>
+                                    <div class="text-muted">{{ user.last_login|date:"H:i" }}</div>
+                                </div>
+                                {% else %}
+                                <span class="text-muted">Never</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary" onclick="viewUser({{ user.id }})" 
+                                            title="View Details">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="btn btn-outline-warning" onclick="editUser({{ user.id }})"
+                                            title="Edit User">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    {% if user.userprofile.face_enrolled %}
+                                    <button class="btn btn-outline-info" onclick="reEnrollFace({{ user.id }})"
+                                            title="Re-enroll Face">
+                                        <i class="fas fa-camera-retro"></i>
+                                    </button>
+                                    {% else %}
+                                    <button class="btn btn-outline-success" onclick="enrollFace({{ user.id }})"
+                                            title="Enroll Face">
+                                        <i class="fas fa-camera"></i>
+                                    </button>
+                                    {% endif %}
+                                    <button class="btn btn-outline-{% if user.is_active %}danger{% else %}success{% endif %}"
+                                            onclick="toggleUserStatus({{ user.id }})"
+                                            title="{% if user.is_active %}Deactivate{% else %}Activate{% endif %}">
+                                        <i class="fas fa-{% if user.is_active %}ban{% else %}check{% endif %}"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-4">
+                                <div class="text-muted">
+                                    <i class="fas fa-users fa-3x mb-3"></i>
+                                    <h5>No personnel records found</h5>
+                                    <p>Get started by adding new personnel to the system.</p>
+                                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addUserModal">
+                                        <i class="fas fa-user-plus me-2"></i>Add First Personnel
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if users.has_other_pages %}
+            <nav aria-label="User pagination" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if users.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ users.previous_page_number }}">Previous</a>
+                    </li>
+                    {% endif %}
+
+                    {% for num in users.paginator.page_range %}
+                    <li class="page-item {% if users.number == num %}active{% endif %}">
+                        <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                    </li>
+                    {% endfor %}
+
+                    {% if users.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ users.next_page_number }}">Next</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Add User Modal -->
+<div class="modal fade" id="addUserModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add New Personnel</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addUserForm">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Username *</label>
+                            <input type="text" class="form-control" name="username" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Email *</label>
+                            <input type="email" class="form-control" name="email" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">First Name</label>
+                            <input type="text" class="form-control" name="first_name">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Last Name</label>
+                            <input type="text" class="form-control" name="last_name">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Phone</label>
+                            <input type="tel" class="form-control" name="phone">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Department</label>
+                            <input type="text" class="form-control" name="department">
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="is_staff">
+                                <label class="form-check-label">Staff Member</label>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="addUser()">Add Personnel</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.avatar-circle {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #003366, #004080);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 51, 102, 0.04);
+}
+
+.btn-group-sm > .btn {
+    padding: 0.25rem 0.5rem;
+}
+
+.card {
+    border: none;
+    border-radius: 0.5rem;
+}
+
+.border-left-primary { border-left: 0.25rem solid #4e73df !important; }
+.border-left-success { border-left: 0.25rem solid #1cc88a !important; }
+.border-left-warning { border-left: 0.25rem solid #f6c23e !important; }
+.border-left-info { border-left: 0.25rem solid #36b9cc !important; }
+
+.shadow {
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15) !important;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Filter functionality
+function applyFilters() {
+    const statusFilter = document.getElementById('statusFilter').value;
+    const faceEnrolledFilter = document.getElementById('faceEnrolledFilter').value;
+    const searchInput = document.getElementById('searchInput').value.toLowerCase();
+    
+    const rows = document.querySelectorAll('#usersTable tbody tr');
+    
+    rows.forEach(row => {
+        let showRow = true;
+        
+        // Status filter
+        if (statusFilter && row.dataset.status !== statusFilter) {
+            showRow = false;
+        }
+        
+        // Face enrolled filter
+        if (faceEnrolledFilter && row.dataset.faceEnrolled !== faceEnrolledFilter) {
+            showRow = false;
+        }
+        
+        // Search filter
+        if (searchInput) {
+            const text = row.textContent.toLowerCase();
+            if (!text.includes(searchInput)) {
+                showRow = false;
+            }
+        }
+        
+        row.style.display = showRow ? '' : 'none';
+    });
+}
+
+// Bulk actions
+function toggleSelectAll() {
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.user-checkbox');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+}
+
+function bulkAction(action) {
+    const selectedUsers = Array.from(document.querySelectorAll('.user-checkbox:checked'))
+        .map(checkbox => checkbox.value);
+    
+    if (selectedUsers.length === 0) {
+        alert('Please select at least one user.');
+        return;
+    }
+    
+    if (confirm(`Are you sure you want to ${action} ${selectedUsers.length} user(s)?`)) {
+        // Implement bulk action API call
+        fetch('/verification/bulk-user-action/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                action: action,
+                user_ids: selectedUsers
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error performing bulk action: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Network error occurred.');
+        });
+    }
+}
+
+// Individual user actions
+function viewUser(userId) {
+    window.location.href = `/verification/user-detail/${userId}/`;
+}
+
+function editUser(userId) {
+    // Implement edit user functionality
+    alert('Edit user: ' + userId);
+}
+
+function enrollFace(userId) {
+    window.location.href = `/verification/admin/register-face/${userId}/`;
+}
+
+function reEnrollFace(userId) {
+    if (confirm('Are you sure you want to re-enroll face for this user? This will overwrite existing face data.')) {
+        window.location.href = `/verification/admin/register-face/${userId}/`;
+    }
+}
+
+function toggleUserStatus(userId) {
+    fetch(`/verification/toggle-user-status/${userId}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error toggling user status: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Network error occurred.');
+    });
+}
+
+// Add new user
+function addUser() {
+    const form = document.getElementById('addUserForm');
+    const formData = new FormData(form);
+    
+    fetch('/verification/add-user/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error adding user: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Network error occurred.');
+    });
+}
+
+// Export functionality
+function exportUsers() {
+    window.location.href = '/verification/export-users/';
+}
+
+// Utility function to get CSRF token
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Initialize filters
+document.addEventListener('DOMContentLoaded', function() {
+    // Add event listeners to filters
+    document.getElementById('statusFilter').addEventListener('change', applyFilters);
+    document.getElementById('faceEnrolledFilter').addEventListener('change', applyFilters);
+    document.getElementById('searchInput').addEventListener('input', applyFilters);
+});
+</script>
+{% endblock %}
