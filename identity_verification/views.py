@@ -113,9 +113,13 @@ def is_admin(user):
 
 # Add CameraManager class
 class CameraManager:
+    """Enhanced camera management system with multiple camera support"""
+
     def __init__(self):
         self.cap = None
         self.camera_in_use = False
+        self._cameras = {}
+        self._lock = threading.Lock()  # Add this line
 
     def get_camera(self, camera_index=0):
         """Safely get camera instance"""
@@ -123,10 +127,12 @@ class CameraManager:
             self.release_camera()
             time.sleep(1)
 
+        # Force release any existing camera instances
         self.emergency_camera_release()
 
         self.cap = cv2.VideoCapture(camera_index)
         if not self.cap.isOpened():
+            # Try alternative camera index
             self.cap = cv2.VideoCapture(1)
 
         if self.cap.isOpened():
@@ -135,17 +141,44 @@ class CameraManager:
         else:
             raise Exception("Could not access camera")
 
-    def release_camera(self):
+    def release_camera(self, camera_id=0):
         """Release camera resources"""
-        if self.cap is not None:
-            self.cap.release()
-            self.cap = None
-        self.camera_in_use = False
-        cv2.destroyAllWindows()
+        try:
+            if self.cap is not None:
+                self.cap.release()
+                self.cap = None
+            self.camera_in_use = False
+            cv2.destroyAllWindows()
+        except Exception as e:
+            logger.error(f"Error releasing camera: {str(e)}")
+
+    def release_all_cameras(self):
+        """Release all camera resources"""
+        try:
+            # Release the main camera
+            if self.cap is not None:
+                self.cap.release()
+                self.cap = None
+
+            # Release any other cameras in the _cameras dict
+            for camera_id in list(self._cameras.keys()):
+                try:
+                    if 'camera' in self._cameras[camera_id]:
+                        self._cameras[camera_id]['camera'].release()
+                    del self._cameras[camera_id]
+                except Exception as e:
+                    logger.error(
+                        f"Error releasing camera {camera_id}: {str(e)}")
+
+            self.camera_in_use = False
+            cv2.destroyAllWindows()
+            logger.info("All cameras released successfully")
+        except Exception as e:
+            logger.error(f"Error in release_all_cameras: {str(e)}")
 
     def emergency_camera_release(self):
         """Force release all camera devices"""
-        for i in range(5):
+        for i in range(5):  # Try multiple camera indices
             try:
                 temp_cap = cv2.VideoCapture(i)
                 temp_cap.release()
@@ -153,6 +186,19 @@ class CameraManager:
                 pass
         cv2.destroyAllWindows()
         time.sleep(0.5)
+
+    def get_available_cameras(self):
+        """Get list of available cameras"""
+        available_cameras = []
+        for i in range(4):  # Check first 4 cameras
+            try:
+                cap = cv2.VideoCapture(i)
+                if cap.isOpened():
+                    available_cameras.append(i)
+                    cap.release()
+            except:
+                continue
+        return available_cameras
 
 
 # Global camera manager instance
