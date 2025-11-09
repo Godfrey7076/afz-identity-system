@@ -1,10 +1,11 @@
 # identity_verification/views.py
+import atexit
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse, HttpResponse, StreamingHttpResponse
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.utils.decorators import method_decorator
 from django.views.generic import TemplateView, View
@@ -28,6 +29,8 @@ import face_recognition
 from PIL import Image
 import io
 from cryptography.fernet import Fernet
+import threading
+import time
 
 from .models import UserProfile, AccessLog, SystemSettings, SecurityAlert
 from django.contrib.auth import get_user_model
@@ -100,6 +103,96 @@ def get_user_agent(request):
 
 def is_admin(user):
     return user.is_staff or user.is_superuser
+
+# Camera Management System
+
+
+class CameraManager:
+    """Enhanced camera management system with multiple camera support"""
+
+    _instance = None
+    _cameras = {}
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(CameraManager, cls).__new__(cls)
+        return cls._instance
+
+    def get_camera(self, camera_id=0):
+        """Get or create camera instance"""
+        with self._lock:
+            if camera_id not in self._cameras:
+                try:
+                    # Try to open camera
+                    cap = cv2.VideoCapture(camera_id)
+                    if cap.isOpened():
+                        # Set camera properties for better performance
+                        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                        cap.set(cv2.CAP_PROP_FPS, 30)
+                        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                        self._cameras[camera_id] = {
+                            'camera': cap,
+                            'last_used': time.time(),
+                            'in_use': False
+                        }
+                        logger.info(
+                            f"Camera {camera_id} initialized successfully")
+                    else:
+                        logger.error(f"Failed to open camera {camera_id}")
+                        return None
+                except Exception as e:
+                    logger.error(
+                        f"Error initializing camera {camera_id}: {str(e)}")
+                    return None
+
+            # Update last used time
+            self._cameras[camera_id]['last_used'] = time.time()
+            return self._cameras[camera_id]['camera']
+
+    def release_camera(self, camera_id=0):
+        """Release camera resources"""
+        with self._lock:
+            if camera_id in self._cameras:
+                try:
+                    self._cameras[camera_id]['camera'].release()
+                    del self._cameras[camera_id]
+                    logger.info(f"Camera {camera_id} released")
+                except Exception as e:
+                    logger.error(
+                        f"Error releasing camera {camera_id}: {str(e)}")
+
+    def release_all_cameras(self):
+        """Release all camera resources"""
+        with self._lock:
+            for camera_id in list(self._cameras.keys()):
+                self.release_camera(camera_id)
+
+    def get_available_cameras(self):
+        """Get list of available cameras"""
+        available_cameras = []
+        for i in range(4):  # Check first 4 cameras
+            try:
+                cap = cv2.VideoCapture(i)
+                if cap.isOpened():
+                    available_cameras.append(i)
+                    cap.release()
+            except:
+                continue
+        return available_cameras
+
+    def cleanup_unused_cameras(self, timeout=300):
+        """Clean up cameras not used for specified timeout"""
+        current_time = time.time()
+        with self._lock:
+            for camera_id in list(self._cameras.keys()):
+                if current_time - self._cameras[camera_id]['last_used'] > timeout:
+                    self.release_camera(camera_id)
+
+
+# Initialize camera manager
+camera_manager = CameraManager()
 
 # Face Recognition Engine
 
@@ -289,6 +382,252 @@ class FaceRecognitionEngine:
 # Initialize face recognition engine
 face_engine = FaceRecognitionEngine()
 
+# Camera Streaming Functions
+
+
+def generate_frames(camera_id=0):
+    """Generate camera frames for streaming"""
+    camera = camera_manager.get_camera(camera_id)
+    if camera is None:
+        return None
+
+    try:
+        while True:
+            success, frame = camera.read()
+            if not success:
+                break
+
+            # Convert frame to JPEG
+            ret, buffer = cv2.imencode('.jpg', frame)
+            if not ret:
+                continue
+
+            frame_bytes = buffer.tobytes()
+
+            # Yield frame in multipart format
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+
+            # Small delay to control frame rate
+            time.sleep(0.03)  # ~30 FPS
+
+    except Exception as e:
+        logger.error(f"Error generating frames: {str(e)}")
+    finally:
+        pass
+
+
+def video_feed(request, camera_id=0):
+    """Video streaming route"""
+    try:
+        return StreamingHttpResponse(
+            generate_frames(camera_id),
+            content_type='multipart/x-mixed-replace; boundary=frame'
+        )
+    except Exception as e:
+        logger.error(f"Video feed error: {str(e)}")
+        return HttpResponse("Camera error", status=500)
+
+
+def capture_frame(camera_id=0):
+    """Capture a single frame from camera"""
+    camera = camera_manager.get_camera(camera_id)
+    if camera is None:
+        return None
+
+    try:
+        success, frame = camera.read()
+        if success:
+            # Convert frame to base64
+            ret, buffer = cv2.imencode('.jpg', frame)
+            if ret:
+                frame_bytes = buffer.tobytes()
+                frame_base64 = base64.b64encode(frame_bytes).decode('utf-8')
+                return frame_base64
+        return None
+    except Exception as e:
+        logger.error(f"Error capturing frame: {str(e)}")
+        return None
+
+# Camera Management Views
+
+
+def start_camera(request):
+    """Start camera and return status"""
+    camera_id = int(request.GET.get('camera_id', 0))
+
+    try:
+        camera = camera_manager.get_camera(camera_id)
+        if camera is None:
+            return JsonResponse({
+                'success': False,
+                'error': f'Camera {camera_id} not available'
+            })
+
+        # Test camera by capturing a frame
+        success, frame = camera.read()
+        if success:
+            return JsonResponse({
+                'success': True,
+                'message': f'Camera {camera_id} started successfully',
+                'camera_id': camera_id
+            })
+        else:
+            camera_manager.release_camera(camera_id)
+            return JsonResponse({
+                'success': False,
+                'error': f'Camera {camera_id} failed to capture frame'
+            })
+
+    except Exception as e:
+        logger.error(f"Error starting camera {camera_id}: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': f'Camera error: {str(e)}'
+        })
+
+
+def stop_camera(request):
+    """Stop camera and release resources"""
+    camera_id = int(request.GET.get('camera_id', 0))
+
+    try:
+        camera_manager.release_camera(camera_id)
+        return JsonResponse({
+            'success': True,
+            'message': f'Camera {camera_id} stopped successfully'
+        })
+    except Exception as e:
+        logger.error(f"Error stopping camera {camera_id}: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': f'Error stopping camera: {str(e)}'
+        })
+
+
+def get_available_cameras(request):
+    """Get list of available cameras"""
+    try:
+        available_cameras = camera_manager.get_available_cameras()
+        return JsonResponse({
+            'success': True,
+            'cameras': available_cameras
+        })
+    except Exception as e:
+        logger.error(f"Error getting available cameras: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': f'Error getting cameras: {str(e)}'
+        })
+
+
+def capture_face(request):
+    """Capture face from camera for verification or enrollment"""
+    camera_id = int(request.GET.get('camera_id', 0))
+
+    try:
+        frame_base64 = capture_frame(camera_id)
+        if frame_base64:
+            return JsonResponse({
+                'success': True,
+                'image': f'data:image/jpeg;base64,{frame_base64}',
+                'message': 'Face captured successfully'
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': 'Failed to capture image from camera'
+            })
+    except Exception as e:
+        logger.error(f"Error capturing face: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': f'Capture error: {str(e)}'
+        })
+
+
+def verify_face_from_camera(request):
+    """Verify face using camera feed"""
+    if request.method == 'POST':
+        try:
+            user_id = request.POST.get('user_id')
+            camera_id = int(request.POST.get('camera_id', 0))
+
+            if not user_id:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'User ID is required'
+                })
+
+            # Capture frame from camera
+            frame_base64 = capture_frame(camera_id)
+            if not frame_base64:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Failed to capture image from camera'
+                })
+
+            # Get user and verify face
+            user = User.objects.get(id=user_id)
+            image_data = f'data:image/jpeg;base64,{frame_base64}'
+
+            is_match, confidence, message = face_engine.verify_face(
+                user, image_data)
+
+            if is_match and confidence >= AFZSecurityConfig.MIN_FACE_CONFIDENCE:
+                # Log successful verification
+                AccessLog.objects.create(
+                    user=user,
+                    login_method='Face Recognition',
+                    status='Success',
+                    ip_address=get_client_ip(request),
+                    user_agent=get_user_agent(request),
+                    details=f'Face verification successful from camera - Confidence: {confidence:.2f}%',
+                    confidence_score=confidence
+                )
+
+                return JsonResponse({
+                    'success': True,
+                    'verified': True,
+                    'confidence': confidence,
+                    'message': 'Face verification successful'
+                })
+            else:
+                # Log failed verification
+                AccessLog.objects.create(
+                    user=user,
+                    login_method='Face Recognition',
+                    status='Failed',
+                    ip_address=get_client_ip(request),
+                    user_agent=get_user_agent(request),
+                    details=f'Face verification failed from camera - Confidence: {confidence:.2f}%',
+                    confidence_score=confidence
+                )
+
+                return JsonResponse({
+                    'success': True,
+                    'verified': False,
+                    'confidence': confidence,
+                    'message': message
+                })
+
+        except User.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'User not found'
+            })
+        except Exception as e:
+            logger.error(f"Error verifying face from camera: {str(e)}")
+            return JsonResponse({
+                'success': False,
+                'error': f'Verification error: {str(e)}'
+            })
+
+    return JsonResponse({
+        'success': False,
+        'error': 'Invalid request method'
+    })
+
 # Home and Basic Views
 
 
@@ -300,12 +639,12 @@ def home_view(request):
         'security_level': 'TOP SECRET',
         'current_time': timezone.now()
     }
-    return render(request, 'home.html', context)
+    return render(request, 'identity_verification/home.html', context)
 
 # Authentication Views
 
 
-@rate_limit(requests=5, window=300)  # 5 attempts per 5 minutes
+@rate_limit(requests=5, window=300)
 def admin_login_view(request):
     """Admin login view with AFZ security enhancements"""
     if request.user.is_authenticated:
@@ -318,7 +657,6 @@ def admin_login_view(request):
 
         if user is not None and user.is_staff:
             login(request, user)
-            # Log admin login
             AccessLog.objects.create(
                 user=user,
                 login_method='Password',
@@ -332,7 +670,6 @@ def admin_login_view(request):
             messages.success(request, 'AFZ Command Center access granted.')
             return redirect('enhanced_dashboard')
         else:
-            # Log failed attempt
             AccessLog.objects.create(
                 user=None,
                 login_method='Password',
@@ -353,7 +690,6 @@ def admin_logout_view(request):
     """Admin logout view with AFZ logging"""
     if request.user.is_authenticated:
         logger.info(f"AFZ Security: Staff logout: {request.user.username}")
-        # Log logout
         AccessLog.objects.create(
             user=request.user,
             login_method='Logout',
@@ -377,8 +713,6 @@ def custom_login(request):
 
         if user is not None:
             login(request, user)
-
-            # Log access
             AccessLog.objects.create(
                 user=user,
                 login_method='Password',
@@ -387,10 +721,8 @@ def custom_login(request):
                 user_agent=get_user_agent(request),
                 details='User login successful'
             )
-
             return redirect('dashboard')
         else:
-            # Log failed attempt
             AccessLog.objects.create(
                 user=None,
                 login_method='Password',
@@ -399,27 +731,37 @@ def custom_login(request):
                 user_agent=get_user_agent(request),
                 details=f'Failed login attempt for username: {username}'
             )
-
             return render(request, 'login.html', {'error': 'Invalid credentials'})
 
     return render(request, 'login.html')
 
-# Face Recognition Views
+
+def logout_view(request):
+    """Logout view"""
+    if request.user.is_authenticated:
+        logout(request)
+    return redirect('home')
+
+# Face Recognition Views with Camera Support
 
 
 def face_login_view(request):
-    """Enhanced face login interface with AFZ branding"""
+    """Enhanced face login interface with AFZ branding and camera support"""
+    available_cameras = camera_manager.get_available_cameras()
+
     context = {
         'system_name': 'AFZ Biometric Access System',
         'security_level': 'RESTRICTED',
-        'min_confidence': AFZSecurityConfig.MIN_FACE_CONFIDENCE
+        'min_confidence': AFZSecurityConfig.MIN_FACE_CONFIDENCE,
+        'available_cameras': available_cameras,
+        'default_camera': available_cameras[0] if available_cameras else 0
     }
     return render(request, 'identity_verification/face_login.html', context)
 
 
 @login_required
 def enroll_face_view(request):
-    """Face enrollment view for users with actual face recognition"""
+    """Face enrollment view for users with actual face recognition and camera support"""
     if not request.user.is_authenticated:
         return redirect('login')
 
@@ -431,6 +773,9 @@ def enroll_face_view(request):
                 request, 'Face already enrolled. You can update your enrollment.')
     except UserProfile.DoesNotExist:
         pass
+
+    # Get available cameras
+    available_cameras = camera_manager.get_available_cameras()
 
     if request.method == 'POST':
         try:
@@ -445,7 +790,6 @@ def enroll_face_view(request):
                 request.user, image_data, encoding_index)
 
             if success:
-                # Log enrollment
                 AccessLog.objects.create(
                     user=request.user,
                     login_method='Enrollment',
@@ -455,14 +799,12 @@ def enroll_face_view(request):
                     details=f'Face enrollment successful - Encoding #{encoding_index + 1}',
                     confidence_score=100.0
                 )
-
                 return JsonResponse({
                     'success': True,
                     'message': 'Face enrolled successfully!',
                     'encoding_index': encoding_index
                 })
             else:
-                # Log failed enrollment
                 AccessLog.objects.create(
                     user=request.user,
                     login_method='Enrollment',
@@ -471,7 +813,6 @@ def enroll_face_view(request):
                     user_agent=get_user_agent(request),
                     details=f'Face enrollment failed: {message}'
                 )
-
                 return JsonResponse({
                     'success': False,
                     'error': message
@@ -487,15 +828,16 @@ def enroll_face_view(request):
     context = {
         'user': request.user,
         'min_confidence': AFZSecurityConfig.MIN_FACE_CONFIDENCE,
-        'max_encodings': AFZSecurityConfig.MAX_FACE_ENCODINGS
+        'max_encodings': AFZSecurityConfig.MAX_FACE_ENCODINGS,
+        'available_cameras': available_cameras,
+        'default_camera': available_cameras[0] if available_cameras else 0
     }
-    return render(request, 'enroll_face.html', context)
+    return render(request, 'identity_verification/enroll_face.html', context)
 
 
 def face_verification_status(request):
     """Check face verification status for a user with AFZ response"""
     user_id = request.GET.get('user_id')
-
     if not user_id:
         return JsonResponse({
             'success': False,
@@ -506,7 +848,6 @@ def face_verification_status(request):
     try:
         user = User.objects.get(id=user_id)
         profile = UserProfile.objects.get(user=user)
-
         status_data = {
             'success': True,
             'registered': profile.face_enrolled,
@@ -516,7 +857,6 @@ def face_verification_status(request):
             'encoding_count': profile.face_encoding_count or 0,
             'code': 'STATUS_CHECK_SUCCESS'
         }
-
         return JsonResponse(status_data)
     except User.DoesNotExist:
         return JsonResponse({
@@ -531,7 +871,21 @@ def face_verification_status(request):
             'code': 'PROFILE_NOT_FOUND'
         })
 
-# Dashboard Views
+# File serving views
+
+
+def serve_media(request, path):
+    """Serve media files"""
+    from django.views.static import serve
+    return serve(request, path, document_root=settings.MEDIA_ROOT)
+
+
+def serve_static(request, path):
+    """Serve static files"""
+    from django.views.static import serve
+    return serve(request, path, document_root=settings.STATIC_ROOT)
+
+# Enhanced RealTime Data Mixin
 
 
 class EnhancedRealTimeDataMixin:
@@ -745,6 +1099,8 @@ class EnhancedRealTimeDataMixin:
             x.get('priority', 'low'), 3))
 
         return alerts
+
+# Dashboard Views
 
 
 @method_decorator(login_required, name='dispatch')
@@ -1723,3 +2079,14 @@ def handler403(request, exception):
 def handler400(request, exception):
     """Custom 400 error handler"""
     return render(request, 'errors/400.html', status=400)
+
+# Cleanup function
+
+
+def cleanup_cameras():
+    """Release all camera resources"""
+    camera_manager.release_all_cameras()
+
+
+# Register cleanup for application shutdown
+atexit.register(cleanup_cameras)

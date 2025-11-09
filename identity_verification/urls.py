@@ -1,21 +1,26 @@
 # identity_verification/urls.py
 from django.urls import path, include
-from rest_framework.routers import DefaultRouter
 from . import views
+from rest_framework.routers import DefaultRouter
 
+# Initialize router
 router = DefaultRouter()
-router.register(r'face-verification',
+router.register(r'api/face-verification',
                 views.FaceVerificationViewSet, basename='face-verification')
-router.register(r'access-logs', views.AccessLogViewSet, basename='access-logs')
+router.register(r'api/access-logs', views.AccessLogViewSet,
+                basename='access-logs')
 
 urlpatterns = [
     # Home and Authentication
     path('', views.home_view, name='home'),
     path('login/', views.custom_login, name='login'),
+    path('logout/', views.logout_view, name='logout'),
     path('admin-login/', views.admin_login_view, name='admin_login'),
     path('admin-logout/', views.admin_logout_view, name='admin_logout'),
 
     # Face Recognition
+    # ADDED: Missing URL for Identity Verification
+    path('verify/', views.face_login_view, name='verify_identity'),
     path('face-login/', views.face_login_view, name='face_login'),
     path('enroll-face/', views.enroll_face_view, name='enroll_face'),
     path('face-status/', views.face_verification_status,
@@ -36,14 +41,29 @@ urlpatterns = [
     path('user/<int:user_id>/register-face/',
          views.register_user_face, name='register_user_face'),
 
-    # Analytics and Logs
+    # Analytics and System
     path('access-logs-analytics/', views.access_logs_analytics,
          name='access_logs_analytics'),
     path('system-status/', views.system_status_view, name='system_status'),
     path('security-audit/', views.security_audit_view, name='security_audit'),
 
+    # Camera Management URLs
+    path('start-camera/', views.start_camera, name='start_camera'),
+    path('stop-camera/', views.stop_camera, name='stop_camera'),
+    path('available-cameras/', views.get_available_cameras,
+         name='available_cameras'),
+    path('capture-face/', views.capture_face, name='capture_face'),
+    path('verify-face-camera/', views.verify_face_from_camera,
+         name='verify_face_camera'),
+    path('video-feed/<int:camera_id>/', views.video_feed, name='video_feed'),
+    path('video-feed/', views.video_feed, name='video_feed_default'),
+
     # API Routes
     path('api/', include(router.urls)),
+
+    # Media and Static files
+    path('media/<path:path>', views.serve_media, name='serve_media'),
+    path('static/<path:path>', views.serve_static, name='serve_static'),
 ]
 
 # Error handlers
