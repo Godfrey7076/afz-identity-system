@@ -179,6 +179,7 @@ video {
     border: 3px solid #003366;
     border-radius: 10px;
     background: #000;
+    min-height: 300px;
 }
 
 .face-overlay {
@@ -258,12 +259,9 @@ video {
 
 {% block extra_js %}
 <script>
-let stream = null;
 let capturedImage = null;
 let currentUser = null;
 const video = document.getElementById('video');
-const canvas = document.getElementById('canvas');
-const context = canvas.getContext('2d');
 
 // Step Management
 function showStep(stepNumber) {
@@ -342,53 +340,96 @@ document.getElementById('checkUserBtn').addEventListener('click', async function
     }
 });
 
-// Webcam Functions
+// Webcam Functions - UPDATED TO USE SAFE CAMERA SYSTEM
 async function startWebcam() {
     try {
-        stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { 
-                width: { ideal: 640 },
-                height: { ideal: 480 },
-                facingMode: 'user'
-            } 
-        });
-        video.srcObject = stream;
+        // Use safe camera API instead of direct camera access
+        console.log('Starting camera via safe API...');
         
-        // Add event listener for video to start playing
-        video.addEventListener('loadedmetadata', () => {
-            console.log('Webcam started successfully');
-        });
+        const response = await fetch('/safe-start-camera/?camera_id=0');
+        const data = await response.json();
+
+        if (data.status !== 'success') {
+            throw new Error(data.message || 'Camera start failed via API');
+        }
+
+        console.log('Camera started successfully via safe API');
         
+        // Since we're using the backend camera system, we don't need frontend camera access
+        // Show a placeholder instead of actual camera feed
+        video.style.background = "linear-gradient(45deg, #003366, #004080)";
+        video.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: white; text-align: center;">
+                <div>
+                    <i class="fas fa-camera fa-3x mb-3"></i>
+                    <p>Camera ready for face recognition</p>
+                    <small>Using AFZ Secure Camera System</small>
+                </div>
+            </div>
+        `;
+
     } catch (err) {
-        console.error('Error accessing webcam:', err);
+        console.error('Error accessing camera via API:', err);
         document.getElementById('step2Result').innerHTML = `
             <div class="alert alert-danger alert-dismissible fade show" role="alert">
                 <i class="fas fa-video-slash me-2"></i>
-                Error accessing webcam. Please ensure your camera is connected and permissions are granted.
+                Camera error: ${err.message}. Please try again or contact support.
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         `;
     }
 }
 
-function captureFrame() {
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    context.drawImage(video, 0, 0);
-    return canvas.toDataURL('image/jpeg', 0.8);
+// Updated capture frame function to use backend camera
+async function captureFrame() {
+    try {
+        // Use the safe camera system to capture frame
+        console.log('Capturing frame via safe API...');
+        
+        const response = await fetch('/capture-face/?camera_id=0');
+        const data = await response.json();
+
+        if (data.success && data.image) {
+            console.log('Frame captured successfully via API');
+            return data.image; // This returns the base64 image from the backend
+        } else {
+            throw new Error(data.error || 'Failed to capture frame via API');
+        }
+    } catch (error) {
+        console.error('Error capturing frame:', error);
+        throw error;
+    }
 }
 
-// Step 2: Capture Face
-document.getElementById('captureBtn').addEventListener('click', function() {
-    capturedImage = captureFrame();
-    document.getElementById('verifyBtn').disabled = false;
-    document.getElementById('step2Result').innerHTML = `
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-            <i class="fas fa-check-circle me-2"></i>
-            Face captured successfully! Click "Verify Identity" to continue.
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    `;
+// Step 2: Capture Face - UPDATED
+document.getElementById('captureBtn').addEventListener('click', async function() {
+    const captureBtn = this;
+    const originalText = captureBtn.innerHTML;
+    captureBtn.disabled = true;
+    captureBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Capturing...';
+
+    try {
+        capturedImage = await captureFrame();
+        document.getElementById('verifyBtn').disabled = false;
+        document.getElementById('step2Result').innerHTML = `
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="fas fa-check-circle me-2"></i>
+                Face captured successfully via AFZ Secure System! Click "Verify Identity" to continue.
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+    } catch (error) {
+        document.getElementById('step2Result').innerHTML = `
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="fas fa-times-circle me-2"></i>
+                Failed to capture image: ${error.message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+    } finally {
+        captureBtn.disabled = false;
+        captureBtn.innerHTML = originalText;
+    }
 });
 
 // Step 2: Verify Face
@@ -436,11 +477,6 @@ document.getElementById('verifyBtn').addEventListener('click', async function() 
             
             showStep(3);
             
-            // Stop webcam
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
-            
             // Redirect to dashboard after 3 seconds
             setTimeout(() => {
                 window.location.href = '/verification/dashboard/';
@@ -474,11 +510,7 @@ document.getElementById('verifyBtn').addEventListener('click', async function() 
 // Navigation Buttons
 document.getElementById('backToStep1').addEventListener('click', function() {
     showStep(1);
-    // Stop webcam when going back
-    if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-        stream = null;
-    }
+    // No need to stop webcam since we're not using frontend camera
 });
 
 document.getElementById('goToDashboard').addEventListener('click', function() {
@@ -512,13 +544,6 @@ function getCookie(name) {
     }
     return cookieValue;
 }
-
-// Stop webcam when leaving page
-window.addEventListener('beforeunload', function() {
-    if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-    }
-});
 
 // Enter key support for security number input
 document.getElementById('securityNumber').addEventListener('keypress', function(e) {

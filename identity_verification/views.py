@@ -1,4 +1,8 @@
 # identity_verification/views.py
+import cv2
+import time
+import logging
+from django.http import JsonResponse
 import atexit
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -107,93 +111,84 @@ def is_admin(user):
 # Camera Management System
 
 
+# Add CameraManager class
 class CameraManager:
-    """Enhanced camera management system with multiple camera support"""
+    def __init__(self):
+        self.cap = None
+        self.camera_in_use = False
 
-    _instance = None
-    _cameras = {}
-    _lock = threading.Lock()
+    def get_camera(self, camera_index=0):
+        """Safely get camera instance"""
+        if self.camera_in_use:
+            self.release_camera()
+            time.sleep(1)
 
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(CameraManager, cls).__new__(cls)
-        return cls._instance
+        self.emergency_camera_release()
 
-    def get_camera(self, camera_id=0):
-        """Get or create camera instance"""
-        with self._lock:
-            if camera_id not in self._cameras:
-                try:
-                    # Try to open camera
-                    cap = cv2.VideoCapture(camera_id)
-                    if cap.isOpened():
-                        # Set camera properties for better performance
-                        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-                        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-                        cap.set(cv2.CAP_PROP_FPS, 30)
-                        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-                        self._cameras[camera_id] = {
-                            'camera': cap,
-                            'last_used': time.time(),
-                            'in_use': False
-                        }
-                        logger.info(
-                            f"Camera {camera_id} initialized successfully")
-                    else:
-                        logger.error(f"Failed to open camera {camera_id}")
-                        return None
-                except Exception as e:
-                    logger.error(
-                        f"Error initializing camera {camera_id}: {str(e)}")
-                    return None
+        self.cap = cv2.VideoCapture(camera_index)
+        if not self.cap.isOpened():
+            self.cap = cv2.VideoCapture(1)
 
-            # Update last used time
-            self._cameras[camera_id]['last_used'] = time.time()
-            return self._cameras[camera_id]['camera']
+        if self.cap.isOpened():
+            self.camera_in_use = True
+            return self.cap
+        else:
+            raise Exception("Could not access camera")
 
-    def release_camera(self, camera_id=0):
+    def release_camera(self):
         """Release camera resources"""
-        with self._lock:
-            if camera_id in self._cameras:
-                try:
-                    self._cameras[camera_id]['camera'].release()
-                    del self._cameras[camera_id]
-                    logger.info(f"Camera {camera_id} released")
-                except Exception as e:
-                    logger.error(
-                        f"Error releasing camera {camera_id}: {str(e)}")
+        if self.cap is not None:
+            self.cap.release()
+            self.cap = None
+        self.camera_in_use = False
+        cv2.destroyAllWindows()
 
-    def release_all_cameras(self):
-        """Release all camera resources"""
-        with self._lock:
-            for camera_id in list(self._cameras.keys()):
-                self.release_camera(camera_id)
-
-    def get_available_cameras(self):
-        """Get list of available cameras"""
-        available_cameras = []
-        for i in range(4):  # Check first 4 cameras
+    def emergency_camera_release(self):
+        """Force release all camera devices"""
+        for i in range(5):
             try:
-                cap = cv2.VideoCapture(i)
-                if cap.isOpened():
-                    available_cameras.append(i)
-                    cap.release()
+                temp_cap = cv2.VideoCapture(i)
+                temp_cap.release()
             except:
-                continue
-        return available_cameras
-
-    def cleanup_unused_cameras(self, timeout=300):
-        """Clean up cameras not used for specified timeout"""
-        current_time = time.time()
-        with self._lock:
-            for camera_id in list(self._cameras.keys()):
-                if current_time - self._cameras[camera_id]['last_used'] > timeout:
-                    self.release_camera(camera_id)
+                pass
+        cv2.destroyAllWindows()
+        time.sleep(0.5)
 
 
+# Global camera manager instance
+camera_manager = CameraManager()
 # Initialize camera manager
 camera_manager = CameraManager()
 
+# === INSERT EMERGENCY RELEASE FUNCTION HERE ===
+
+
+def emergency_camera_release():
+    """Force release all camera devices - emergency fix"""
+    logger.info("Performing emergency camera release")
+    for i in range(5):  # Try multiple camera indices
+        try:
+            cap = cv2.VideoCapture(i)
+            cap.release()
+            logger.info(f"Released camera index {i}")
+        except Exception as e:
+            logger.error(f"Error releasing camera {i}: {str(e)}")
+    cv2.destroyAllWindows()
+    time.sleep(1)  # Wait for release to complete
+
+
+def emergency_camera_release():
+    """Force release all camera devices - emergency fix"""
+    logger.info("Performing emergency camera release")
+    for i in range(5):  # Try multiple camera indices
+        try:
+            cap = cv2.VideoCapture(i)
+            cap.release()
+            logger.info(f"Released camera index {i}")
+        except Exception as e:
+            logger.error(f"Error releasing camera {i}: {str(e)}")
+    cv2.destroyAllWindows()
+    time.sleep(1)  # Wait for release to complete
 # Face Recognition Engine
 
 
@@ -1554,6 +1549,12 @@ class FaceVerificationViewSet(viewsets.ViewSet):
     def verify_face(self, request):
         """Verify face against stored encoding with enhanced AFZ security logging"""
         try:
+            # === CAMERA CLEANUP - PREVENT "DEVICE IN USE" ERROR ===
+            emergency_camera_release()
+            camera_manager.release_all_cameras()
+            time.sleep(1)
+            # === END CAMERA CLEANUP ===
+
             user_id = request.data.get('user_id')
             image_data = request.data.get('image')
 
@@ -1628,6 +1629,10 @@ class FaceVerificationViewSet(viewsets.ViewSet):
 
         except Exception as e:
             logger.error(f"AFZ Security: Face verification system error: {e}")
+            # === CAMERA CLEANUP ON ERROR ===
+            emergency_camera_release()
+            camera_manager.release_all_cameras()
+            # === END CAMERA CLEANUP ===
             return AFZResponse.error(
                 message='AFZ System error. Please try again.',
                 code='SYSTEM_ERROR',
@@ -1638,70 +1643,90 @@ class FaceVerificationViewSet(viewsets.ViewSet):
     @rate_limit(requests=5, window=300)
     def register_face(self, request):
         """Register a new face for a user with AFZ security validation"""
-        user_id = request.data.get('user_id')
-        image_data = request.data.get('image')
-        encoding_index = int(request.data.get('encoding_index', 0))
-
-        if not user_id or not image_data:
-            return AFZResponse.error(
-                message='User ID and image are required',
-                code='MISSING_DATA',
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
-
         try:
-            user = User.objects.get(id=user_id)
+            # === CAMERA CLEANUP - PREVENT "DEVICE IN USE" ERROR ===
+            emergency_camera_release()
+            camera_manager.release_all_cameras()
+            time.sleep(1)
+            # === END CAMERA CLEANUP ===
 
-            # Process face enrollment
-            success, message = face_engine.enroll_face(
-                user, image_data, encoding_index)
+            user_id = request.data.get('user_id')
+            image_data = request.data.get('image')
+            encoding_index = int(request.data.get('encoding_index', 0))
 
-            if success:
-                user_profile = UserProfile.objects.get(user=user)
-
-                # Log the registration
-                AccessLog.objects.create(
-                    user=user,
-                    login_method='Registration',
-                    status='Success',
-                    ip_address=get_client_ip(request),
-                    user_agent=get_user_agent(request),
-                    details=f'Face enrollment completed successfully - Encoding #{encoding_index + 1}',
-                    confidence_score=100.0
-                )
-
-                logger.info(
-                    f"AFZ Security: Successfully registered face for user: {user.username}")
-
-                return Response(AFZResponse.success(
-                    data={
-                        'user': {
-                            'id': user.id,
-                            'username': user.username,
-                            'enrollment_date': user_profile.face_enrollment_date.isoformat(),
-                            'encoding_count': user_profile.face_encoding_count or 1
-                        }
-                    },
-                    message='AFZ Biometric data registered successfully',
-                    code='REGISTRATION_SUCCESS'
-                ))
-            else:
+            if not user_id or not image_data:
                 return AFZResponse.error(
-                    message=message,
-                    code='REGISTRATION_FAILED',
+                    message='User ID and image are required',
+                    code='MISSING_DATA',
                     status_code=status.HTTP_400_BAD_REQUEST
                 )
 
-        except User.DoesNotExist:
-            return AFZResponse.error(
-                message='AFZ Personnel record not found',
-                code='USER_NOT_FOUND',
-                status_code=status.HTTP_404_NOT_FOUND
-            )
+            try:
+                user = User.objects.get(id=user_id)
+
+                # Process face enrollment
+                success, message = face_engine.enroll_face(
+                    user, image_data, encoding_index)
+
+                if success:
+                    user_profile = UserProfile.objects.get(user=user)
+
+                    # Log the registration
+                    AccessLog.objects.create(
+                        user=user,
+                        login_method='Registration',
+                        status='Success',
+                        ip_address=get_client_ip(request),
+                        user_agent=get_user_agent(request),
+                        details=f'Face enrollment completed successfully - Encoding #{encoding_index + 1}',
+                        confidence_score=100.0
+                    )
+
+                    logger.info(
+                        f"AFZ Security: Successfully registered face for user: {user.username}")
+
+                    return Response(AFZResponse.success(
+                        data={
+                            'user': {
+                                'id': user.id,
+                                'username': user.username,
+                                'enrollment_date': user_profile.face_enrollment_date.isoformat(),
+                                'encoding_count': user_profile.face_encoding_count or 1
+                            }
+                        },
+                        message='AFZ Biometric data registered successfully',
+                        code='REGISTRATION_SUCCESS'
+                    ))
+                else:
+                    return AFZResponse.error(
+                        message=message,
+                        code='REGISTRATION_FAILED',
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+
+            except User.DoesNotExist:
+                return AFZResponse.error(
+                    message='AFZ Personnel record not found',
+                    code='USER_NOT_FOUND',
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            except Exception as e:
+                logger.error(
+                    f"AFZ Security: Face registration system error: {e}")
+                return AFZResponse.error(
+                    message='AFZ Registration system error',
+                    code='SYSTEM_ERROR',
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
         except Exception as e:
-            logger.error(f"AFZ Security: Face registration system error: {e}")
+            logger.error(f"AFZ Security: Face registration outer error: {e}")
+            # === CAMERA CLEANUP ON ERROR ===
+            emergency_camera_release()
+            camera_manager.release_all_cameras()
+            # === END CAMERA CLEANUP ===
             return AFZResponse.error(
-                message='AFZ Registration system error',
+                message='AFZ System error during registration',
                 code='SYSTEM_ERROR',
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
@@ -1709,58 +1734,77 @@ class FaceVerificationViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def check_registration(self, request):
         """Check if a user has face registered with AFZ status"""
-        user_id = request.GET.get('user_id')
-
-        if not user_id:
-            return AFZResponse.error(
-                message='User ID is required',
-                code='MISSING_DATA',
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
-
         try:
-            user = User.objects.get(id=user_id)
-            user_profile = UserProfile.objects.get(user=user)
+            # === CAMERA CLEANUP - PREVENT "DEVICE IN USE" ERROR ===
+            emergency_camera_release()
+            camera_manager.release_all_cameras()
+            time.sleep(0.5)
+            # === END CAMERA CLEANUP ===
 
-            return Response(AFZResponse.success(
-                data={
-                    'registered': user_profile.face_enrolled,
-                    'user': {
-                        'id': user.id,
-                        'username': user.username,
-                        'email': user.email,
-                        'is_verified': user_profile.face_enrolled,
-                        'enrollment_date': user_profile.face_enrollment_date.isoformat() if user_profile.face_enrollment_date else None,
-                        'encoding_count': user_profile.face_encoding_count or 0,
-                        'encoding_version': user_profile.face_encoding_version
-                    }
-                },
-                message='Registration status retrieved successfully',
-                code='CHECK_SUCCESS'
-            ))
-        except User.DoesNotExist:
+            user_id = request.GET.get('user_id')
+
+            if not user_id:
+                return AFZResponse.error(
+                    message='User ID is required',
+                    code='MISSING_DATA',
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+
+            try:
+                user = User.objects.get(id=user_id)
+                user_profile = UserProfile.objects.get(user=user)
+
+                return Response(AFZResponse.success(
+                    data={
+                        'registered': user_profile.face_enrolled,
+                        'user': {
+                            'id': user.id,
+                            'username': user.username,
+                            'email': user.email,
+                            'is_verified': user_profile.face_enrolled,
+                            'enrollment_date': user_profile.face_enrollment_date.isoformat() if user_profile.face_enrollment_date else None,
+                            'encoding_count': user_profile.face_encoding_count or 0,
+                            'encoding_version': user_profile.face_encoding_version
+                        }
+                    },
+                    message='Registration status retrieved successfully',
+                    code='CHECK_SUCCESS'
+                ))
+            except User.DoesNotExist:
+                return AFZResponse.error(
+                    message='AFZ Personnel not found in system',
+                    code='USER_NOT_FOUND',
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            except UserProfile.DoesNotExist:
+                return Response(AFZResponse.success(
+                    data={
+                        'registered': False,
+                        'user': {
+                            'id': user.id,
+                            'username': user.username,
+                            'email': user.email,
+                            'is_verified': False,
+                            'enrollment_date': None,
+                            'encoding_count': 0,
+                            'encoding_version': None
+                        }
+                    },
+                    message='User exists but no face registration found',
+                    code='CHECK_SUCCESS'
+                ))
+
+        except Exception as e:
+            logger.error(f"AFZ Security: Check registration error: {e}")
+            # === CAMERA CLEANUP ON ERROR ===
+            emergency_camera_release()
+            camera_manager.release_all_cameras()
+            # === END CAMERA CLEANUP ===
             return AFZResponse.error(
-                message='AFZ Personnel not found in system',
-                code='USER_NOT_FOUND',
-                status_code=status.HTTP_404_NOT_FOUND
+                message='AFZ System error during registration check',
+                code='SYSTEM_ERROR',
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        except UserProfile.DoesNotExist:
-            return Response(AFZResponse.success(
-                data={
-                    'registered': False,
-                    'user': {
-                        'id': user.id,
-                        'username': user.username,
-                        'email': user.email,
-                        'is_verified': False,
-                        'enrollment_date': None,
-                        'encoding_count': 0,
-                        'encoding_version': None
-                    }
-                },
-                message='User exists but no face registration found',
-                code='CHECK_SUCCESS'
-            ))
 
 
 class AccessLogViewSet(viewsets.ModelViewSet):
@@ -2057,6 +2101,122 @@ def security_audit_view(request):
     }
 
     return render(request, 'identity_verification/security_audit.html', context)
+
+# === ENHANCED CAMERA MANAGEMENT FUNCTIONS ===
+
+
+def safe_start_camera(request):
+    """Enhanced camera start with emergency release"""
+    try:
+        camera_id = int(request.GET.get('camera_id', 0))
+
+        # Force emergency release first
+        emergency_camera_release()
+        time.sleep(1)
+
+        # Get camera instance
+        cap = camera_manager.get_camera(camera_id)
+
+        if cap is None:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Camera {camera_id} not available'
+            })
+
+        # Test camera
+        ret, frame = cap.read()
+        if not ret:
+            camera_manager.release_camera(camera_id)
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Camera test failed'
+            })
+
+        camera_manager.release_camera(camera_id)
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Camera {camera_id} started successfully'
+        })
+
+    except Exception as e:
+        logger.error(f"Error starting camera {camera_id}: {str(e)}")
+        return JsonResponse({'status': 'error', 'message': str(e)})
+
+
+def safe_face_recognition(request):
+    """Face recognition with proper camera cleanup"""
+    try:
+        camera_id = int(request.GET.get('camera_id', 0))
+
+        # Emergency release first
+        emergency_camera_release()
+        time.sleep(1)
+
+        # Get camera instance
+        cap = camera_manager.get_camera(camera_id)
+
+        if cap is None:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Camera not available'
+            })
+
+        # Simple test - just open and close camera
+        ret, frame = cap.read()
+        if ret:
+            return JsonResponse({
+                'status': 'success',
+                'message': 'Camera working - ready for face recognition'
+            })
+        else:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Camera test failed'
+            })
+
+    except Exception as e:
+        logger.error(f"Face recognition error: {str(e)}")
+        return JsonResponse({'status': 'error', 'message': str(e)})
+    finally:
+        emergency_camera_release()
+        camera_manager.release_all_cameras()
+
+
+def stop_all_cameras(request):
+    """Force stop all cameras"""
+    try:
+        emergency_camera_release()
+        camera_manager.release_all_cameras()
+        return JsonResponse({
+            'status': 'success',
+            'message': 'All cameras stopped'
+        })
+    except Exception as e:
+        logger.error(f"Error stopping cameras: {str(e)}")
+        return JsonResponse({'status': 'error', 'message': str(e)})
+
+
+def camera_status(request):
+    """Check camera status"""
+    try:
+        camera_id = int(request.GET.get('camera_id', 0))
+
+        # Test camera directly
+        cap = cv2.VideoCapture(camera_id)
+        direct_available = cap.isOpened()
+        if direct_available:
+            cap.release()
+
+        cv2.destroyAllWindows()
+
+        return JsonResponse({
+            'status': 'success',
+            'camera_id': camera_id,
+            'available': direct_available
+        })
+    except Exception as e:
+        logger.error(f"Error checking camera status: {str(e)}")
+        return JsonResponse({'status': 'error', 'message': str(e)})
 
 # Error handlers
 

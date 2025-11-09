@@ -1,21 +1,27 @@
-﻿# Air Force Zimbabwe Identity Verification System
+﻿# AFZ Identity Verification System
 
-Advanced face recognition authentication system for secure access control.
+Advanced facial recognition and identity verification platform for the Air Force of Zimbabwe.
 
 ## Features
-- 🔐 Face Recognition Login
-- 👥 User Management
-- 📊 Access Logs & Analytics
-- 🎯 Admin Dashboard
+
+- 🔐 **Facial Recognition Authentication**
+- 📷 **Real-time Camera Integration**
+- 👥 **User Management Dashboard**
+- 📊 **Access Logs & Analytics**
+- 🛡️ **Security Audit & Monitoring**
+- 🔒 **Encrypted Face Data Storage**
+
+## Technology Stack
+
+- **Backend**: Django 4.2.7 + Django REST Framework
+- **Face Recognition**: OpenCV + face_recognition library
+- **Frontend**: HTML5, CSS3, JavaScript
+- **Database**: SQLite (Development) / PostgreSQL (Production)
+- **Security**: AES-256 Encryption for biometric data
 
 ## Installation
-1. Clone repository
-2. Install dependencies: `pip install -r requirements.txt`
-3. Run migrations: `python manage.py migrate`
-4. Create superuser: `python manage.py createsuperuser`
-5. Run server: `python manage.py runserver`
 
-## Access
-- **Homepage**: http://localhost:8000/
-- **Face Login**: http://localhost:8000/verification/login/
-- **Admin Panel**: http://localhost:8000/admin/
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/Godfrey7076/afz-identity-system.git
+   cd afz-identity-system

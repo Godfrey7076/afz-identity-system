@@ -2,6 +2,8 @@
 from django.urls import path, include
 from . import views
 from rest_framework.routers import DefaultRouter
+from django.urls import path
+from . import views
 
 # Initialize router
 router = DefaultRouter()
@@ -11,6 +13,11 @@ router.register(r'api/access-logs', views.AccessLogViewSet,
                 basename='access-logs')
 
 urlpatterns = [
+    path('safe-start-camera/', views.safe_start_camera, name='safe_start_camera'),
+    path('safe-face-recognition/', views.safe_face_recognition,
+         name='safe_face_recognition'),
+    path('stop-cameras/', views.stop_all_cameras, name='stop_all_cameras'),
+    path('camera-status/', views.camera_status, name='camera_status'),
     # Home and Authentication
     path('', views.home_view, name='home'),
     path('login/', views.custom_login, name='login'),
