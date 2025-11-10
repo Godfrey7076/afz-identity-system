@@ -1,422 +1,133 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AFZ Biometric Access</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #1a1a1a;
-            color: white;
-            text-align: center;
-            padding: 2rem;
-            margin: 0;
-        }
-        .biometric-container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: #2a2a2a;
-            padding: 2rem;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        }
-        .camera-feed {
-            width: 100%;
-            max-width: 640px;
-            height: 480px;
-            background: #000;
-            border: 3px solid #555;
-            margin: 2rem auto;
-            border-radius: 8px;
-            overflow: hidden;
-            position: relative;
-        }
-        #videoElement {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        .camera-placeholder {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: #888;
-            font-size: 18px;
-        }
-        .controls {
-            margin: 1rem 0;
-        }
-        .btn {
-            background: #4CAF50;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            margin: 0 10px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: bold;
-            transition: background 0.3s ease;
-        }
-        .btn:hover {
-            background: #45a049;
-        }
-        .btn:disabled {
-            background: #666;
-            cursor: not-allowed;
-        }
-        .btn-danger {
-            background: #f44336;
-        }
-        .btn-danger:hover {
-            background: #da190b;
-        }
-        .btn-warning {
-            background: #ff9800;
-            color: black;
-        }
-        .btn-warning:hover {
-            background: #e68900;
-        }
-        .status {
-            margin: 1rem 0;
-            padding: 1rem;
-            border-radius: 5px;
-            font-weight: bold;
-        }
-        .status-success {
-            background: #4CAF50;
-            color: white;
-        }
-        .status-error {
-            background: #f44336;
-            color: white;
-        }
-        .status-info {
-            background: #2196F3;
-            color: white;
-        }
-        .user-input {
-            margin: 1rem 0;
-        }
-        .user-input input {
-            padding: 10px;
-            border: 1px solid #555;
-            border-radius: 5px;
-            background: #333;
-            color: white;
-            font-size: 16px;
-            width: 200px;
-        }
-        .user-input input:focus {
-            outline: none;
-            border-color: #4CAF50;
-        }
-        .camera-selector {
-            margin: 1rem 0;
-        }
-        .camera-selector select {
-            padding: 8px;
-            border: 1px solid #555;
-            border-radius: 5px;
-            background: #333;
-            color: white;
-        }
-        .hidden {
-            display: none;
-        }
-        .back-link {
-            margin-top: 2rem;
-        }
-        .back-link a {
-            color: #4CAF50;
-            text-decoration: none;
-            font-size: 16px;
-        }
-        .back-link a:hover {
-            text-decoration: underline;
-        }
-        .security-badge {
-            background: #ff6b6b;
-            color: white;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 14px;
-            display: inline-block;
-            margin: 10px 0;
-        }
-    </style>
-</head>
-<body>
-    <div class="biometric-container">
-        <h1>🔐 AFZ Biometric Access System</h1>
-        <div class="security-badge">SECURITY LEVEL: RESTRICTED</div>
-        <p>Facial Recognition Authentication</p>
+// Start Face Recognition (Browser Camera Only)
+async function startFaceRecognition() {
+    const cameraId = parseInt(cameraSelect.value) || 0;
+    
+    if (!userIdInput.value.trim()) {
+        updateStatus('Please enter your User ID first', 'error');
+        return;
+    }
 
-        <div class="user-input">
-            <input type="text" id="userId" placeholder="Enter your User ID" required>
-        </div>
-
-        <div class="camera-feed">
-            <video id="videoElement" autoplay playsinline class="hidden"></video>
-            <div id="cameraPlaceholder" class="camera-placeholder">
-                📷 Camera feed will appear here
-            </div>
-        </div>
-
-        <div class="camera-selector">
-            <label for="cameraSelect">Select Camera: </label>
-            <select id="cameraSelect">
-                <option value="0">Default Camera</option>
-            </select>
-        </div>
-
-        <div class="controls">
-            <button id="startCamera" class="btn" onclick="startFaceRecognition()">Start Face Recognition</button>
-            <button id="stopCamera" class="btn btn-danger" onclick="stopCamera()" disabled>Stop Camera</button>
-            <button id="captureFace" class="btn btn-warning" onclick="captureAndVerify()" disabled>Capture & Verify</button>
-        </div>
-
-        <div id="statusMessage" class="status hidden"></div>
-
-        <div class="back-link">
-            <a href="/">← Back to Home</a>
-        </div>
-    </div>
-
-    <script>
-        // DOM Elements
-        const videoElement = document.getElementById('videoElement');
-        const cameraPlaceholder = document.getElementById('cameraPlaceholder');
-        const startCameraBtn = document.getElementById('startCamera');
-        const stopCameraBtn = document.getElementById('stopCamera');
-        const captureFaceBtn = document.getElementById('captureFace');
-        const cameraSelect = document.getElementById('cameraSelect');
-        const statusMessage = document.getElementById('statusMessage');
-        const userIdInput = document.getElementById('userId');
-
-        let currentStream = null;
-        let currentCameraId = 0;
-
-        // Update status message
-        function updateStatus(message, type = 'info') {
-            statusMessage.textContent = message;
-            statusMessage.className = `status status-${type}`;
-            statusMessage.classList.remove('hidden');
-        }
-
-        // Clear status message
-        function clearStatus() {
-            statusMessage.classList.add('hidden');
-        }
-
-        // Get available cameras
-        async function getAvailableCameras() {
-            try {
-                const response = await fetch('/available-cameras/');
-                const data = await response.json();
-                
-                if (data.success && data.cameras.length > 0) {
-                    cameraSelect.innerHTML = '';
-                    data.cameras.forEach(cameraId => {
-                        const option = document.createElement('option');
-                        option.value = cameraId;
-                        option.textContent = `Camera ${cameraId}`;
-                        cameraSelect.appendChild(option);
-                    });
-                }
-            } catch (error) {
-                console.error('Error getting cameras:', error);
+    try {
+        updateStatus('Starting camera... Please allow camera access.', 'info');
+        
+        // Get user media stream from browser ONLY - no backend calls
+        const constraints = {
+            video: {
+                width: { ideal: 640 },
+                height: { ideal: 480 },
+                facingMode: 'user'
             }
+        };
+
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        currentStream = stream;
+
+        // Display video stream
+        videoElement.srcObject = stream;
+        videoElement.classList.remove('hidden');
+        cameraPlaceholder.classList.add('hidden');
+
+        // Update UI
+        startCameraBtn.disabled = true;
+        stopCameraBtn.disabled = false;
+        captureFaceBtn.disabled = false;
+        cameraSelect.disabled = true;
+
+        updateStatus('✅ Camera started! Position your face in the center of the frame.', 'success');
+
+    } catch (error) {
+        console.error('Error starting camera:', error);
+        
+        if (error.name === 'NotAllowedError') {
+            updateStatus('❌ Camera access denied. Please allow camera permissions and try again.', 'error');
+        } else if (error.name === 'NotFoundError') {
+            updateStatus('❌ No camera found. Please check if your camera is connected.', 'error');
+        } else if (error.name === 'NotSupportedError') {
+            updateStatus('❌ Camera not supported in this browser.', 'error');
+        } else {
+            updateStatus(`❌ Camera error: ${error.message}`, 'error');
         }
+    }
+}
 
-        // Start Face Recognition (Camera)
-        async function startFaceRecognition() {
-            const cameraId = parseInt(cameraSelect.value) || 0;
-            
-            if (!userIdInput.value.trim()) {
-                updateStatus('Please enter your User ID first', 'error');
-                return;
-            }
+// Stop camera
+function stopCamera() {
+    if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+        currentStream = null;
+    }
 
-            try {
-                updateStatus('Starting camera... Please allow camera access.', 'info');
-                
-                // Start camera via backend
-                const startResponse = await fetch(`/start-camera/?camera_id=${cameraId}`);
-                const startData = await startResponse.json();
-                
-                if (!startData.success) {
-                    throw new Error(startData.error || 'Failed to start camera');
-                }
+    // Update UI
+    videoElement.srcObject = null;
+    videoElement.classList.add('hidden');
+    cameraPlaceholder.classList.remove('hidden');
 
-                // Get user media stream from browser
-                const constraints = {
-                    video: {
-                        deviceId: cameraId ? { exact: cameraId } : undefined,
-                        width: { ideal: 640 },
-                        height: { ideal: 480 },
-                        facingMode: 'user'
-                    }
-                };
+    startCameraBtn.disabled = false;
+    stopCameraBtn.disabled = true;
+    captureFaceBtn.disabled = true;
+    cameraSelect.disabled = false;
 
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                currentStream = stream;
-                currentCameraId = cameraId;
+    clearStatus();
+}
 
-                // Display video stream
-                videoElement.srcObject = stream;
-                videoElement.classList.remove('hidden');
-                cameraPlaceholder.classList.add('hidden');
+// Capture face and verify - MODIFIED to use canvas capture
+async function captureAndVerify() {
+    if (!currentStream || !userIdInput.value.trim()) {
+        updateStatus('Please start camera and enter User ID', 'error');
+        return;
+    }
 
-                // Update UI
-                startCameraBtn.disabled = true;
-                stopCameraBtn.disabled = false;
-                captureFaceBtn.disabled = false;
-                cameraSelect.disabled = true;
+    try {
+        updateStatus('📸 Capturing face...', 'info');
+        captureFaceBtn.disabled = true;
 
-                updateStatus('✅ Camera started! Position your face in the center of the frame.', 'success');
+        // Small delay to ensure video frame is ready
+        await new Promise(resolve => setTimeout(resolve, 100));
 
-            } catch (error) {
-                console.error('Error starting camera:', error);
-                
-                if (error.name === 'NotAllowedError') {
-                    updateStatus('❌ Camera access denied. Please allow camera permissions and try again.', 'error');
-                } else if (error.name === 'NotFoundError') {
-                    updateStatus('❌ No camera found. Please check if your camera is connected.', 'error');
-                } else if (error.name === 'NotSupportedError') {
-                    updateStatus('❌ Camera not supported in this browser.', 'error');
-                } else {
-                    updateStatus(`❌ Camera error: ${error.message}`, 'error');
-                }
-            }
-        }
+        // Capture frame from browser video element
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = videoElement.videoWidth;
+        canvas.height = videoElement.videoHeight;
+        context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+        
+        // Small delay to ensure image processing is complete
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        // Convert to base64
+        const imageData = canvas.toDataURL('image/jpeg', 0.8);
 
-        // Stop camera
-        function stopCamera() {
-            if (currentStream) {
-                currentStream.getTracks().forEach(track => track.stop());
-                currentStream = null;
-            }
+        updateStatus('🔍 Verifying face...', 'info');
 
-            // Stop camera via backend
-            fetch(`/stop-camera/?camera_id=${currentCameraId}`)
-                .catch(error => console.error('Error stopping camera:', error));
-
-            // Update UI
-            videoElement.srcObject = null;
-            videoElement.classList.add('hidden');
-            cameraPlaceholder.classList.remove('hidden');
-
-            startCameraBtn.disabled = false;
-            stopCameraBtn.disabled = true;
-            captureFaceBtn.disabled = true;
-            cameraSelect.disabled = false;
-
-            clearStatus();
-        }
-
-        // Capture face and verify
-        async function captureAndVerify() {
-            if (!currentStream || !userIdInput.value.trim()) {
-                updateStatus('Please start camera and enter User ID', 'error');
-                return;
-            }
-
-            try {
-                updateStatus('📸 Capturing face...', 'info');
-                captureFaceBtn.disabled = true;
-
-                // Capture frame from camera
-                const captureResponse = await fetch(`/capture-face/?camera_id=${currentCameraId}`);
-                const captureData = await captureResponse.json();
-
-                if (!captureData.success) {
-                    throw new Error(captureData.error || 'Failed to capture image');
-                }
-
-                updateStatus('🔍 Verifying face...', 'info');
-
-                // Verify face using backend
-                const verifyResponse = await fetch('/verify-face-camera/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        'X-CSRFToken': getCsrfToken()
-                    },
-                    body: `user_id=${userIdInput.value}&camera_id=${currentCameraId}`
-                });
-
-                const verifyData = await verifyResponse.json();
-
-                if (verifyData.success) {
-                    if (verifyData.verified) {
-                        updateStatus(`✅ Verification Successful! Confidence: ${verifyData.confidence.toFixed(2)}%`, 'success');
-                    } else {
-                        updateStatus(`❌ Verification Failed: ${verifyData.message}`, 'error');
-                    }
-                } else {
-                    updateStatus(`❌ Error: ${verifyData.error}`, 'error');
-                }
-
-            } catch (error) {
-                console.error('Error during verification:', error);
-                updateStatus(`❌ Verification error: ${error.message}`, 'error');
-            } finally {
-                captureFaceBtn.disabled = false;
-            }
-        }
-
-        // Get CSRF token
-        function getCsrfToken() {
-            // Try to get CSRF token from cookie
-            const name = 'csrftoken';
-            let cookieValue = null;
-            if (document.cookie && document.cookie !== '') {
-                const cookies = document.cookie.split(';');
-                for (let i = 0; i < cookies.length; i++) {
-                    const cookie = cookies[i].trim();
-                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                        break;
-                    }
-                }
-            }
-            return cookieValue || '';
-        }
-
-        // Initialize when page loads
-        document.addEventListener('DOMContentLoaded', function() {
-            // Get available cameras
-            getAvailableCameras();
-            
-            // Auto-start camera if user ID is provided in URL
-            const urlParams = new URLSearchParams(window.location.search);
-            const autoUserId = urlParams.get('user_id');
-            if (autoUserId) {
-                userIdInput.value = autoUserId;
-                // Auto-start after a short delay
-                setTimeout(startFaceRecognition, 1000);
-            }
+        // Verify face using backend with the captured image
+        const verifyResponse = await fetch('/api/face-verification/verify_face/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                user_id: userIdInput.value,
+                image: imageData
+            })
         });
 
-        // Handle page unload - stop camera
-        window.addEventListener('beforeunload', function() {
-            if (currentStream) {
-                stopCamera();
-            }
-        });
+        const verifyData = await verifyResponse.json();
 
-        // Handle camera selection change
-        cameraSelect.addEventListener('change', function() {
-            if (currentStream) {
-                // If camera is running, restart with new camera
-                stopCamera();
-                setTimeout(startFaceRecognition, 500);
+        if (verifyData.success) {
+            if (verifyData.verified) {
+                updateStatus(`✅ Verification Successful! Confidence: ${verifyData.confidence.toFixed(2)}%`, 'success');
+            } else {
+                updateStatus(`❌ Verification Failed: ${verifyData.message}`, 'error');
             }
-        });
-    </script>
-</body>
-</html>
+        } else {
+            updateStatus(`❌ Error: ${verifyData.error}`, 'error');
+        }
+
+    } catch (error) {
+        console.error('Error during verification:', error);
+        updateStatus(`❌ Verification error: ${error.message}`, 'error');
+    } finally {
+        captureFaceBtn.disabled = false;
+    }
+}

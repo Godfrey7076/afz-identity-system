@@ -4,8 +4,121 @@ from django.core.cache import cache
 from django.http import JsonResponse
 from django.conf import settings
 import logging
+import time
 
 logger = logging.getLogger(__name__)
+
+# Import camera manager safely to avoid circular imports
+try:
+    from .views import camera_manager
+except ImportError:
+    logger.warning("Could not import camera_manager from views")
+    camera_manager = None
+
+
+class CameraCleanupMiddleware:
+    """
+    Middleware to release camera resources when exceptions occur
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        return response
+
+    def process_exception(self, request, exception):
+        """Release cameras when an exception occurs in any view"""
+        try:
+            if camera_manager:
+                logger.warning(
+                    f"CameraCleanupMiddleware: Releasing cameras due to exception: {str(exception)}")
+                camera_manager.release_all_cameras()
+                # Small delay to ensure camera is released
+                time.sleep(0.5)
+            else:
+                logger.warning(
+                    "CameraCleanupMiddleware: camera_manager not available")
+        except Exception as e:
+            logger.error(f"Error in camera cleanup middleware: {str(e)}")
+        return None
+
+
+class CameraReleaseMiddleware:
+    """
+    Middleware to ensure cameras are released after video feed requests
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+        # Define camera-related URL patterns
+        self.camera_urls = [
+            '/video_feed/',
+            '/verify/',
+            '/start_camera/',
+            '/stop_camera/',
+            '/capture_face/',
+            '/enroll-face/',
+        ]
+
+    def __call__(self, request):
+        try:
+            response = self.get_response(request)
+            return response
+        finally:
+            # Always try to release cameras after request completion for camera-related URLs
+            if self._is_camera_request(request):
+                self._release_camera_after_request(request)
+
+    def _is_camera_request(self, request):
+        """Check if this is a camera-related request"""
+        if not hasattr(request, 'path'):
+            return False
+
+        path = request.path
+        return any(camera_url in path for camera_url in self.camera_urls)
+
+    def _release_camera_after_request(self, request):
+        """Release camera resources after request completion"""
+        if not camera_manager:
+            return
+
+        try:
+            # Extract camera_id from URL if possible
+            camera_id = self._extract_camera_id(request.path)
+
+            # Small delay to ensure any ongoing camera operations complete
+            time.sleep(0.1)
+
+            # Release the specific camera
+            camera_manager.release_camera(camera_id)
+
+            logger.debug(
+                f"CameraReleaseMiddleware: Released camera {camera_id} after {request.path}")
+
+        except Exception as e:
+            logger.error(f"Error releasing camera in middleware: {str(e)}")
+
+    def _extract_camera_id(self, path):
+        """Extract camera ID from URL path"""
+        try:
+            if '/video_feed/' in path:
+                parts = path.split('/')
+                for i, part in enumerate(parts):
+                    if part == 'video_feed' and i + 1 < len(parts) and parts[i + 1].isdigit():
+                        return int(parts[i + 1])
+
+            # Check for camera_id parameter in other URLs
+            if '/start_camera/' in path or '/stop_camera/' in path:
+                parts = path.split('/')
+                if len(parts) > 2 and parts[-2].isdigit():
+                    return int(parts[-2])
+
+        except (ValueError, IndexError):
+            pass
+
+        return 0  # Default camera ID
 
 
 class RateLimitMiddleware:
@@ -126,7 +239,10 @@ class LoggingMiddleware:
             '/login/',
             '/admin-login/',
             '/api/face-verification/',
-            '/user-management/'
+            '/user-management/',
+            '/verify/',
+            '/video_feed/',
+            '/enroll-face/'
         ]
 
         if any(request.path.endswith(endpoint) for endpoint in sensitive_endpoints):

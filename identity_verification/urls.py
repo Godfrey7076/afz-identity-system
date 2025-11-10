@@ -54,16 +54,20 @@ urlpatterns = [
     path('system-status/', views.system_status_view, name='system_status'),
     path('security-audit/', views.security_audit_view, name='security_audit'),
 
-    # Camera Management URLs
-    path('start-camera/', views.start_camera, name='start_camera'),
-    path('stop-camera/', views.stop_camera, name='stop_camera'),
-    path('available-cameras/', views.get_available_cameras,
+    # Camera management URLs
+    path('video_feed/<int:camera_id>/', views.video_feed, name='video_feed'),
+    path('start_camera/', views.start_camera, name='start_camera'),
+    path('stop_camera/', views.stop_camera, name='stop_camera'),
+    path('camera_status/', views.camera_status, name='camera_status'),
+    path('available_cameras/', views.get_available_cameras,
          name='available_cameras'),
-    path('capture-face/', views.capture_face, name='capture_face'),
-    path('verify-face-camera/', views.verify_face_from_camera,
-         name='verify_face_camera'),
-    path('video-feed/<int:camera_id>/', views.video_feed, name='video_feed'),
-    path('video-feed/', views.video_feed, name='video_feed_default'),
+    path('stop_all_cameras/', views.stop_all_cameras, name='stop_all_cameras'),
+    path('capture_face/', views.capture_face, name='capture_face'),
+
+    # ADD THIS NEW URL
+    path('test_camera/', views.test_camera, name='test_camera'),
+
+
 
     # API Routes
     path('api/', include(router.urls)),

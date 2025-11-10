@@ -112,99 +112,169 @@ def is_admin(user):
 
 
 # Add CameraManager class
-class CameraManager:
-    """Enhanced camera management system with multiple camera support"""
+class EnhancedCameraManager:
+    """Thread-safe camera management with proper resource handling"""
+
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(EnhancedCameraManager, cls).__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
 
     def __init__(self):
-        self.cap = None
-        self.camera_in_use = False
-        self._cameras = {}
-        self._lock = threading.Lock()  # Add this line
+        if self._initialized:
+            return
 
-    def get_camera(self, camera_index=0):
-        """Safely get camera instance"""
-        if self.camera_in_use:
-            self.release_camera()
-            time.sleep(1)
+        self.cameras = {}
+        self.camera_locks = {}
+        self._initialized = True
 
-        # Force release any existing camera instances
-        self.emergency_camera_release()
+    def get_camera(self, camera_id=0, timeout=10):
+        """Safely get camera instance with timeout"""
+        with self._lock:
+            # Clean up any dead cameras first
+            self._cleanup_dead_cameras()
 
-        self.cap = cv2.VideoCapture(camera_index)
-        if not self.cap.isOpened():
-            # Try alternative camera index
-            self.cap = cv2.VideoCapture(1)
+            # If camera exists and is working, return it
+            if camera_id in self.cameras:
+                try:
+                    cap = self.cameras[camera_id]
+                    if cap.isOpened():
+                        # Test if camera is still responsive
+                        ret, frame = cap.read()
+                        if ret:
+                            return cap
+                        else:
+                            # Camera is dead, release it
+                            self.release_camera(camera_id)
+                except:
+                    self.release_camera(camera_id)
 
-        if self.cap.isOpened():
-            self.camera_in_use = True
-            return self.cap
-        else:
-            raise Exception("Could not access camera")
+            # Create camera lock if it doesn't exist
+            if camera_id not in self.camera_locks:
+                self.camera_locks[camera_id] = threading.Lock()
 
-    def release_camera(self, camera_id=0):
-        """Release camera resources"""
+        # Use camera-specific lock to prevent multiple access
+        with self.camera_locks[camera_id]:
+            try:
+                # Force release any existing camera instances
+                self._emergency_release(camera_id)
+                time.sleep(0.5)
+
+                # Try to open camera with different backends
+                cap = self._try_open_camera(camera_id)
+
+                if cap and cap.isOpened():
+                    # Configure camera
+                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                    cap.set(cv2.CAP_PROP_FPS, 30)
+
+                    self.cameras[camera_id] = cap
+                    logger.info(f"Camera {camera_id} opened successfully")
+                    return cap
+                else:
+                    logger.error(f"Failed to open camera {camera_id}")
+                    return None
+
+            except Exception as e:
+                logger.error(f"Error opening camera {camera_id}: {str(e)}")
+                return None
+
+    def _try_open_camera(self, camera_id):
+        """Try different methods to open camera"""
+        # Try different backends
+        backends = [
+            cv2.CAP_DSHOW,  # DirectShow (Windows)
+            cv2.CAP_MSMF,   # Microsoft Media Foundation (Windows)
+            cv2.CAP_V4L2,   # V4L2 (Linux)
+            cv2.CAP_ANY     # Auto-detect
+        ]
+
+        for backend in backends:
+            try:
+                cap = cv2.VideoCapture(camera_id, backend)
+                if cap.isOpened():
+                    # Test if camera can read frames
+                    for _ in range(3):  # Try a few times
+                        ret, frame = cap.read()
+                        if ret and frame is not None:
+                            return cap
+                    cap.release()
+            except Exception as e:
+                logger.warning(f"Backend {backend} failed: {str(e)}")
+                continue
+
+        return None
+
+    def release_camera(self, camera_id):
+        """Release specific camera"""
         try:
-            if self.cap is not None:
-                self.cap.release()
-                self.cap = None
-            self.camera_in_use = False
-            cv2.destroyAllWindows()
+            if camera_id in self.cameras:
+                cap = self.cameras[camera_id]
+                if cap is not None:
+                    cap.release()
+                del self.cameras[camera_id]
+                logger.info(f"Camera {camera_id} released")
         except Exception as e:
-            logger.error(f"Error releasing camera: {str(e)}")
+            logger.error(f"Error releasing camera {camera_id}: {str(e)}")
 
     def release_all_cameras(self):
-        """Release all camera resources"""
-        try:
-            # Release the main camera
-            if self.cap is not None:
-                self.cap.release()
-                self.cap = None
-
-            # Release any other cameras in the _cameras dict
-            for camera_id in list(self._cameras.keys()):
-                try:
-                    if 'camera' in self._cameras[camera_id]:
-                        self._cameras[camera_id]['camera'].release()
-                    del self._cameras[camera_id]
-                except Exception as e:
-                    logger.error(
-                        f"Error releasing camera {camera_id}: {str(e)}")
-
-            self.camera_in_use = False
+        """Release all cameras"""
+        with self._lock:
+            for camera_id in list(self.cameras.keys()):
+                self.release_camera(camera_id)
+            self.cameras.clear()
             cv2.destroyAllWindows()
-            logger.info("All cameras released successfully")
-        except Exception as e:
-            logger.error(f"Error in release_all_cameras: {str(e)}")
+            logger.info("All cameras released")
 
-    def emergency_camera_release(self):
-        """Force release all camera devices"""
-        for i in range(5):  # Try multiple camera indices
+    def _cleanup_dead_cameras(self):
+        """Clean up cameras that are no longer working"""
+        dead_cameras = []
+        for camera_id, cap in self.cameras.items():
             try:
-                temp_cap = cv2.VideoCapture(i)
-                temp_cap.release()
+                if not cap.isOpened():
+                    dead_cameras.append(camera_id)
+                    continue
+
+                # Test if camera responds
+                ret, frame = cap.read()
+                if not ret or frame is None:
+                    dead_cameras.append(camera_id)
+            except:
+                dead_cameras.append(camera_id)
+
+        for camera_id in dead_cameras:
+            self.release_camera(camera_id)
+
+    def _emergency_release(self, camera_id):
+        """Emergency release for specific camera"""
+        for i in range(3):  # Try multiple times
+            try:
+                temp_cap = cv2.VideoCapture(camera_id)
+                if temp_cap.isOpened():
+                    temp_cap.release()
+                break
             except:
                 pass
-        cv2.destroyAllWindows()
-        time.sleep(0.5)
+            time.sleep(0.1)
 
     def get_available_cameras(self):
         """Get list of available cameras"""
-        available_cameras = []
+        available = []
         for i in range(4):  # Check first 4 cameras
-            try:
-                cap = cv2.VideoCapture(i)
-                if cap.isOpened():
-                    available_cameras.append(i)
-                    cap.release()
-            except:
-                continue
-        return available_cameras
+            cap = self.get_camera(i)
+            if cap is not None:
+                available.append(i)
+                self.release_camera(i)  # Release immediately after check
+        return available
 
 
 # Global camera manager instance
-camera_manager = CameraManager()
-# Initialize camera manager
-camera_manager = CameraManager()
+camera_manager = EnhancedCameraManager()
 
 # === INSERT EMERGENCY RELEASE FUNCTION HERE ===
 
@@ -427,47 +497,101 @@ face_engine = FaceRecognitionEngine()
 
 
 def generate_frames(camera_id=0):
-    """Generate camera frames for streaming"""
-    camera = camera_manager.get_camera(camera_id)
-    if camera is None:
-        return None
+    """Generate camera frames with working backend selection"""
+    camera = None
+    max_retries = 5
+    retry_count = 0
 
-    try:
-        while True:
-            success, frame = camera.read()
-            if not success:
-                break
+    while retry_count < max_retries:
+        try:
+            # Force cleanup first
+            emergency_camera_release()
+            time.sleep(0.5)
 
-            # Convert frame to JPEG
-            ret, buffer = cv2.imencode('.jpg', frame)
-            if not ret:
+            # Use DSHOW backend (which your test confirmed works)
+            camera = cv2.VideoCapture(camera_id, cv2.CAP_DSHOW)
+
+            if not camera.isOpened():
+                logger.error(
+                    f"Failed to open camera {camera_id} with DSHOW backend")
+                retry_count += 1
                 continue
 
-            frame_bytes = buffer.tobytes()
+            # Configure camera - use lower resolution for better performance
+            camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            camera.set(cv2.CAP_PROP_FPS, 30)
+            camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            camera.set(cv2.CAP_PROP_AUTOFOCUS, 1)
 
-            # Yield frame in multipart format
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            # Warm up camera with a few reads
+            for _ in range(5):
+                camera.read()
+            time.sleep(0.5)
 
-            # Small delay to control frame rate
-            time.sleep(0.03)  # ~30 FPS
+            logger.info(
+                f"Camera {camera_id} streaming started with DSHOW backend")
 
-    except Exception as e:
-        logger.error(f"Error generating frames: {str(e)}")
-    finally:
-        pass
+            # Main streaming loop
+            while True:
+                success, frame = camera.read()
+                if not success:
+                    logger.warning("Frame read failed, restarting camera...")
+                    break
+
+                # Ensure frame is valid
+                if frame is None:
+                    continue
+
+                # Resize frame for better performance if needed
+                if frame.shape[1] > 640:
+                    frame = cv2.resize(frame, (640, 480))
+
+                # Encode as JPEG
+                ret, buffer = cv2.imencode('.jpg', frame, [
+                    cv2.IMWRITE_JPEG_QUALITY, 70
+                ])
+
+                if ret:
+                    frame_bytes = buffer.tobytes()
+                    yield (b'--frame\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+
+                # Small delay to control frame rate
+                time.sleep(0.033)  # ~30 FPS
+
+        except Exception as e:
+            logger.error(
+                f"Streaming error (attempt {retry_count + 1}): {str(e)}")
+            retry_count += 1
+            time.sleep(1)
+        finally:
+            # Always release camera in finally block
+            if camera is not None:
+                camera.release()
+                camera = None
+            cv2.destroyAllWindows()
+
+    logger.error(f"Streaming failed after {max_retries} attempts")
 
 
 def video_feed(request, camera_id=0):
-    """Video streaming route"""
+    """Video streaming route that actually works"""
     try:
-        return StreamingHttpResponse(
+        # Set response headers for streaming
+        response = StreamingHttpResponse(
             generate_frames(camera_id),
             content_type='multipart/x-mixed-replace; boundary=frame'
         )
+        response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response['Pragma'] = 'no-cache'
+        response['Expires'] = '0'
+        response['X-Accel-Buffering'] = 'no'  # Important for streaming
+        return response
     except Exception as e:
-        logger.error(f"Video feed error: {str(e)}")
-        return HttpResponse("Camera error", status=500)
+        logger.error(f"Video feed setup error: {str(e)}")
+        emergency_camera_release()
+        return HttpResponse("Camera streaming error", status=500)
 
 
 def capture_frame(camera_id=0):
@@ -494,24 +618,45 @@ def capture_frame(camera_id=0):
 
 
 def start_camera(request):
-    """Start camera and return status"""
+    """Start camera with specific backend that works"""
     camera_id = int(request.GET.get('camera_id', 0))
 
     try:
-        camera = camera_manager.get_camera(camera_id)
-        if camera is None:
+        # Force cleanup
+        emergency_camera_release()
+        time.sleep(0.5)
+
+        # Use DSHOW backend (confirmed working)
+        camera = cv2.VideoCapture(camera_id, cv2.CAP_DSHOW)
+
+        if not camera.isOpened():
             return JsonResponse({
                 'success': False,
-                'error': f'Camera {camera_id} not available'
+                'error': 'Camera failed to open with DSHOW backend'
             })
 
-        # Test camera by capturing a frame
-        success, frame = camera.read()
-        if success:
+        # Configure camera
+        camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+        # Test with multiple reads
+        test_success = False
+        for i in range(10):  # Try more times
+            success, frame = camera.read()
+            if success and frame is not None:
+                test_success = True
+                break
+            time.sleep(0.1)
+
+        camera.release()
+        cv2.destroyAllWindows()
+
+        if test_success:
             return JsonResponse({
                 'success': True,
-                'message': f'Camera {camera_id} started successfully',
-                'camera_id': camera_id
+                'message': f'Camera {camera_id} ready for streaming',
+                'camera_id': camera_id,
+                'backend': 'DSHOW'
             })
         else:
             camera_manager.release_camera(camera_id)
@@ -521,15 +666,16 @@ def start_camera(request):
             })
 
     except Exception as e:
-        logger.error(f"Error starting camera {camera_id}: {str(e)}")
+        logger.error(f"Start camera error: {str(e)}")
+        emergency_camera_release()
         return JsonResponse({
             'success': False,
-            'error': f'Camera error: {str(e)}'
+            'error': f'Camera initialization failed: {str(e)}'
         })
 
 
 def stop_camera(request):
-    """Stop camera and release resources"""
+    """Stop camera with proper cleanup"""
     camera_id = int(request.GET.get('camera_id', 0))
 
     try:
@@ -543,6 +689,93 @@ def stop_camera(request):
         return JsonResponse({
             'success': False,
             'error': f'Error stopping camera: {str(e)}'
+        })
+
+
+def test_camera(request):
+    """Test camera connectivity and return detailed status"""
+    camera_id = int(request.GET.get('camera_id', 0))
+
+    results = {
+        'camera_id': camera_id,
+        'available': False,
+        'backends_tested': [],
+        'error': None
+    }
+
+    # Test different backends
+    backends = [
+        ('DSHOW', cv2.CAP_DSHOW),
+        ('MSMF', cv2.CAP_MSMF),
+        ('V4L2', cv2.CAP_V4L2),
+        ('ANY', cv2.CAP_ANY)
+    ]
+
+    for backend_name, backend in backends:
+        try:
+            cap = cv2.VideoCapture(camera_id, backend)
+            if cap.isOpened():
+                # Test frame capture
+                ret, frame = cap.read()
+                if ret and frame is not None:
+                    results['backends_tested'].append({
+                        'name': backend_name,
+                        'status': 'working',
+                        'resolution': f"{frame.shape[1]}x{frame.shape[0]}" if frame is not None else 'unknown'
+                    })
+                    results['available'] = True
+                else:
+                    results['backends_tested'].append({
+                        'name': backend_name,
+                        'status': 'opened_but_no_frames'
+                    })
+                cap.release()
+            else:
+                results['backends_tested'].append({
+                    'name': backend_name,
+                    'status': 'failed_to_open'
+                })
+        except Exception as e:
+            results['backends_tested'].append({
+                'name': backend_name,
+                'status': 'error',
+                'error': str(e)
+            })
+
+    if not results['available']:
+        results['error'] = 'Camera not accessible with any backend'
+
+    return JsonResponse(results)
+
+
+def camera_status(request):
+    """Check camera status"""
+    camera_id = int(request.GET.get('camera_id', 0))
+
+    try:
+        # Test camera directly without keeping it open
+        cap = cv2.VideoCapture(camera_id, cv2.CAP_DSHOW)
+        if cap.isOpened():
+            # Test if it can read frames
+            ret, frame = cap.read()
+            available = ret and frame is not None
+            cap.release()
+        else:
+            available = False
+
+        cv2.destroyAllWindows()
+
+        return JsonResponse({
+            'success': True,
+            'camera_id': camera_id,
+            'available': available,
+            'status': 'available' if available else 'unavailable'
+        })
+    except Exception as e:
+        logger.error(f"Error checking camera status: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
         })
 
 
